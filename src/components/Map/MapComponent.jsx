@@ -1,16 +1,15 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { MapContainer, TileLayer, Polygon, CircleMarker, Marker, useMap, useMapEvents } from 'react-leaflet';
+import { MapContainer, TileLayer, Polygon, CircleMarker, useMap, useMapEvents } from 'react-leaflet';
 import { useGeolocation } from '../../hooks/useGeolocation';
 import { supabase } from '../../utils/supabaseClient';
 import { 
-  Palette, MousePointer2, Trash2, Check, X, 
+  MousePointer2, Trash2, Check, X, 
   Navigation, Square, Download, Globe, MapPin, 
-  Plus, Sparkles, Crosshair
+  Plus, Crosshair, ChevronRight, Info
 } from 'lucide-react';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 
-// Fix íconos Leaflet
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
@@ -29,119 +28,45 @@ const MARKER_COLORS = [
   '#06b6d4', '#8b5cf6', '#ec4899', '#10b981', '#f59e0b', '#ef4444'
 ];
 
-// ===== COMPONENTE: BURST DE PARTÍCULAS =====
-const ParticleBurst = ({ x, y, color }) => {
-  const particles = Array.from({ length: 16 }, (_, i) => {
-    const angle = (i / 16) * Math.PI * 2;
-    const distance = 40 + Math.random() * 40;
-    return {
-      id: i,
-      tx: Math.cos(angle) * distance,
-      ty: Math.sin(angle) * distance,
-      delay: Math.random() * 0.1,
-      size: 4 + Math.random() * 6,
-    };
-  });
+// ===== COMPONENTE: TOOLTIP INLINE DEL MARCADOR =====
+const MarkerTooltip = ({ marker, onDelete }) => {
+  const [expanded, setExpanded] = useState(false);
 
   return (
-    <div 
-      className="pointer-events-none fixed z-[9999]"
-      style={{ left: x, top: y, transform: 'translate(-50%, -50%)' }}
-    >
-      {particles.map((p) => (
-        <span
-          key={p.id}
-          className="particle absolute rounded-full"
-          style={{
-            width: p.size,
-            height: p.size,
-            background: `radial-gradient(circle, ${color} 0%, transparent 70%)`,
-            boxShadow: `0 0 10px ${color}`,
-            '--tx': `${p.tx}px`,
-            '--ty': `${p.ty}px`,
-            animationDelay: `${p.delay}s`,
-          }}
-        />
-      ))}
-    </div>
-  );
-};
-
-// ===== COMPONENTE: MODAL HOLOGRÁFICO =====
-const HolographicModal = ({ marker, onClose, onDelete }) => {
-  if (!marker) return null;
-
-  return (
-    <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4" onClick={onClose}>
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
-      
+    <div className="marker-tooltip-container">
+      {/* Card compacta siempre visible */}
       <div 
-        className="hologram-card relative w-full max-w-md rounded-2xl p-6 text-cyan-50"
-        onClick={(e) => e.stopPropagation()}
+        className={`marker-card ${expanded ? 'marker-card-expanded' : ''}`}
+        onClick={() => setExpanded(!expanded)}
       >
-        {/* Esquinas decorativas */}
-        <div className="absolute top-0 left-0 w-4 h-4 border-t-2 border-l-2 border-cyan-400 rounded-tl-lg" />
-        <div className="absolute top-0 right-0 w-4 h-4 border-t-2 border-r-2 border-cyan-400 rounded-tr-lg" />
-        <div className="absolute bottom-0 left-0 w-4 h-4 border-b-2 border-l-2 border-cyan-400 rounded-bl-lg" />
-        <div className="absolute bottom-0 right-0 w-4 h-4 border-b-2 border-r-2 border-cyan-400 rounded-br-lg" />
-
-        {/* Header */}
-        <div className="relative z-10 flex items-start justify-between mb-4">
-          <div className="flex items-center gap-3">
-            <div 
-              className="w-3 h-3 rounded-full animate-pulse"
-              style={{ backgroundColor: marker.color, boxShadow: `0 0 10px ${marker.color}` }}
-            />
-            <h2 className="text-xl font-bold tracking-wider uppercase" style={{ fontFamily: 'monospace' }}>
-              {marker.name || 'Ubicación Desconocida'}
-            </h2>
-          </div>
-          <button 
-            onClick={onClose}
-            className="text-cyan-400 hover:text-white transition-colors"
-          >
-            <X className="w-6 h-6" />
-          </button>
+        {/* Header siempre visible */}
+        <div className="marker-header">
+          <div className="marker-dot" style={{ backgroundColor: marker.color, boxShadow: `0 0 10px ${marker.color}` }} />
+          <h3 className="marker-title">{marker.name || 'Sin nombre'}</h3>
+          <ChevronRight className={`marker-chevron ${expanded ? 'rotate-90' : ''}`} />
         </div>
 
-        {/* Línea divisoria animada */}
-        <div className="h-px w-full bg-gradient-to-r from-transparent via-cyan-500 to-transparent mb-4 opacity-60" />
+        {/* Descripción expandible */}
+        <div className={`marker-body ${expanded ? 'marker-body-open' : ''}`}>
+          <div className="marker-divider" />
+          
+          <p className="marker-description">
+            {marker.description || 'Sin descripción disponible.'}
+          </p>
 
-        {/* Contenido */}
-        <div className="relative z-10 space-y-4">
-          <div>
-            <p className="text-xs text-cyan-400 uppercase tracking-widest mb-1 opacity-70">Descripción</p>
-            <p className="text-sm leading-relaxed text-cyan-100 hologram-scroll max-h-40 overflow-y-auto pr-2">
-              {marker.description || 'Sin descripción disponible.'}
-            </p>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3 text-xs font-mono">
-            <div className="bg-cyan-950/30 border border-cyan-500/20 rounded-lg p-2">
-              <span className="text-cyan-500 block mb-1">LAT</span>
-              <span className="text-cyan-100">{marker.lat?.toFixed(6)}</span>
-            </div>
-            <div className="bg-cyan-950/30 border border-cyan-500/20 rounded-lg p-2">
-              <span className="text-cyan-500 block mb-1">LNG</span>
-              <span className="text-cyan-100">{marker.lng?.toFixed(6)}</span>
-            </div>
-          </div>
-
-          <div className="flex items-center justify-between pt-2">
-            <span className="text-[10px] text-cyan-600 font-mono">
-              ID: {marker.id?.slice(0, 8)}... • {new Date(marker.created_at).toLocaleDateString()}
+          <div className="marker-meta">
+            <span className="marker-coords">
+              {marker.lat?.toFixed(5)}, {marker.lng?.toFixed(5)}
             </span>
             <button
-              onClick={() => {
-                if (confirm('¿Eliminar este marcador permanentemente?')) {
-                  onDelete(marker.id);
-                  onClose();
-                }
+              onClick={(e) => {
+                e.stopPropagation();
+                if (confirm('¿Eliminar este marcador?')) onDelete(marker.id);
               }}
-              className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20 transition-all text-xs font-mono"
+              className="marker-delete-btn"
             >
               <Trash2 className="w-3 h-3" />
-              ELIMINAR
+              Eliminar
             </button>
           </div>
         </div>
@@ -150,119 +75,37 @@ const HolographicModal = ({ marker, onClose, onDelete }) => {
   );
 };
 
-// ===== COMPONENTE: FORM PARA NUEVO MARCADOR =====
-const MarkerFormModal = ({ position, onSave, onCancel }) => {
-  const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
-  const [color, setColor] = useState(MARKER_COLORS[0]);
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (!name.trim()) return;
-    onSave({ name: name.trim(), description: description.trim(), color, lat: position.lat, lng: position.lng });
-  };
-
-  return (
-    <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4" onClick={onCancel}>
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
-      <div 
-        className="hologram-card relative w-full max-w-sm rounded-2xl p-6 text-cyan-50"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="absolute top-0 left-0 w-4 h-4 border-t-2 border-l-2 border-cyan-400 rounded-tl-lg" />
-        <div className="absolute top-0 right-0 w-4 h-4 border-t-2 border-r-2 border-cyan-400 rounded-tr-lg" />
-        <div className="absolute bottom-0 left-0 w-4 h-4 border-b-2 border-l-2 border-cyan-400 rounded-bl-lg" />
-        <div className="absolute bottom-0 right-0 w-4 h-4 border-b-2 border-r-2 border-cyan-400 rounded-br-lg" />
-
-        <h2 className="text-lg font-bold tracking-wider uppercase mb-4 flex items-center gap-2" style={{ fontFamily: 'monospace' }}>
-          <Sparkles className="w-5 h-5 text-cyan-400" />
-          Nuevo Marcador
-        </h2>
-
-        <form onSubmit={handleSubmit} className="space-y-4 relative z-10">
-          <div>
-            <label className="text-xs text-cyan-400 uppercase tracking-widest block mb-1">Nombre del lugar</label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Ej: Plaza Central"
-              className="w-full bg-cyan-950/30 border border-cyan-500/30 rounded-lg px-3 py-2 text-sm text-cyan-100 placeholder-cyan-700 focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/50"
-              autoFocus
-            />
-          </div>
-
-          <div>
-            <label className="text-xs text-cyan-400 uppercase tracking-widest block mb-1">Descripción</label>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Describe este lugar..."
-              rows={3}
-              className="w-full bg-cyan-950/30 border border-cyan-500/30 rounded-lg px-3 py-2 text-sm text-cyan-100 placeholder-cyan-700 focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/50 resize-none"
-            />
-          </div>
-
-          <div>
-            <label className="text-xs text-cyan-400 uppercase tracking-widest block mb-2">Color del marcador</label>
-            <div className="flex gap-2">
-              {MARKER_COLORS.map((c) => (
-                <button
-                  key={c}
-                  type="button"
-                  onClick={() => setColor(c)}
-                  className={`w-8 h-8 rounded-full border-2 transition-all ${color === c ? 'border-white scale-110 shadow-lg' : 'border-transparent opacity-60 hover:opacity-100'}`}
-                  style={{ backgroundColor: c, boxShadow: color === c ? `0 0 12px ${c}` : 'none' }}
-                />
-              ))}
-            </div>
-          </div>
-
-          <div className="flex gap-2 pt-2">
-            <button
-              type="button"
-              onClick={onCancel}
-              className="flex-1 px-4 py-2 rounded-lg bg-cyan-950/30 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-900/30 transition-all text-sm font-mono"
-            >
-              CANCELAR
-            </button>
-            <button
-              type="submit"
-              className="flex-1 px-4 py-2 rounded-lg bg-cyan-500/20 border border-cyan-400/50 text-cyan-300 hover:bg-cyan-500/30 transition-all text-sm font-mono flex items-center justify-center gap-2"
-            >
-              <Check className="w-4 h-4" />
-              GUARDAR
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-};
-
-// ===== COMPONENTE: MARCADOR ANIMADO CUSTOM =====
-const AnimatedMarker = ({ marker, onClick }) => {
+// ===== COMPONENTE: MARCADOR CUSTOM CON TOOLTIP =====
+const CustomMarker = ({ marker, onDelete }) => {
   const map = useMap();
   
   const customIcon = L.divIcon({
-    className: 'custom-marker',
-    html: `<div class="marker-pin" style="--marker-color: ${marker.color}"></div>`,
-    iconSize: [24, 24],
-    iconAnchor: [12, 12],
-    popupAnchor: [0, -12],
+    className: 'custom-marker-pin',
+    html: `
+      <div class="pin-outer" style="--pin-color: ${marker.color}">
+        <div class="pin-inner"></div>
+        <div class="pin-pulse"></div>
+      </div>
+    `,
+    iconSize: [28, 28],
+    iconAnchor: [14, 14],
   });
 
   return (
     <Marker
       position={[marker.lat, marker.lng]}
       icon={customIcon}
-      eventHandlers={{
-        click: (e) => {
-          const containerPoint = map.latLngToContainerPoint([marker.lat, marker.lng]);
-          onClick(marker, containerPoint);
-        },
-      }}
-    />
+    >
+      {/* Popup de Leaflet con nuestro componente React */}
+      <L.Popup 
+        closeButton={false}
+        className="custom-popup"
+        maxWidth={320}
+        minWidth={280}
+      >
+        <MarkerTooltip marker={marker} onDelete={onDelete} />
+      </L.Popup>
+    </Marker>
   );
 };
 
@@ -275,8 +118,7 @@ const DrawingHandler = ({ mode, onPointAdd, points, onFinish, onCancel, onMapCli
       if (mode === 'area') {
         onPointAdd([e.latlng.lat, e.latlng.lng]);
       } else if (mode === 'marker') {
-        const containerPoint = map.latLngToContainerPoint(e.latlng);
-        onMapClick({ lat: e.latlng.lat, lng: e.latlng.lng }, containerPoint);
+        onMapClick({ lat: e.latlng.lat, lng: e.latlng.lng });
       }
     },
     dblclick(e) {
@@ -293,7 +135,7 @@ const DrawingHandler = ({ mode, onPointAdd, points, onFinish, onCancel, onMapCli
     };
     if (mode) {
       window.addEventListener('keydown', handleKeyDown);
-      map.getContainer().style.cursor = mode === 'marker' ? 'crosshair' : 'crosshair';
+      map.getContainer().style.cursor = 'crosshair';
     } else {
       map.getContainer().style.cursor = '';
     }
@@ -318,63 +160,189 @@ const DrawingPreview = ({ points, color, map }) => {
   return null;
 };
 
+// ===== FORMULARIO MARCADOR =====
+const MarkerFormModal = ({ position, onSave, onCancel }) => {
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [color, setColor] = useState(MARKER_COLORS[0]);
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!name.trim()) return;
+    onSave({ name: name.trim(), description: description.trim(), color, lat: position.lat, lng: position.lng });
+  };
+
+  return (
+    <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4" onClick={onCancel}>
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+      <div 
+        className="hologram-card relative w-full max-w-sm rounded-2xl p-6 text-cyan-50"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="absolute top-0 left-0 w-4 h-4 border-t-2 border-l-2 border-cyan-400 rounded-tl-lg" />
+        <div className="absolute top-0 right-0 w-4 h-4 border-t-2 border-r-2 border-cyan-400 rounded-tr-lg" />
+        <div className="absolute bottom-0 left-0 w-4 h-4 border-b-2 border-l-2 border-cyan-400 rounded-bl-lg" />
+        <div className="absolute bottom-0 right-0 w-4 h-4 border-b-2 border-r-2 border-cyan-400 rounded-br-lg" />
+
+        <h2 className="text-lg font-bold tracking-wider uppercase mb-4 flex items-center gap-2 font-mono">
+          <Plus className="w-5 h-5 text-cyan-400" />
+          Nuevo Marcador
+        </h2>
+
+        <form onSubmit={handleSubmit} className="space-y-4 relative z-10">
+          <div>
+            <label className="text-xs text-cyan-400 uppercase tracking-widest block mb-1">Nombre</label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Ej: Plaza Central"
+              className="w-full bg-cyan-950/30 border border-cyan-500/30 rounded-lg px-3 py-2 text-sm text-cyan-100 placeholder-cyan-700 focus:outline-none focus:border-cyan-400"
+              autoFocus
+            />
+          </div>
+
+          <div>
+            <label className="text-xs text-cyan-400 uppercase tracking-widest block mb-1">Descripción</label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Describe este lugar..."
+              rows={3}
+              className="w-full bg-cyan-950/30 border border-cyan-500/30 rounded-lg px-3 py-2 text-sm text-cyan-100 placeholder-cyan-700 focus:outline-none focus:border-cyan-400 resize-none"
+            />
+          </div>
+
+          <div>
+            <label className="text-xs text-cyan-400 uppercase tracking-widest block mb-2">Color</label>
+            <div className="flex gap-2">
+              {MARKER_COLORS.map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => setColor(c)}
+                  className={`w-8 h-8 rounded-full border-2 transition-all ${color === c ? 'border-white scale-110' : 'border-transparent opacity-60'}`}
+                  style={{ backgroundColor: c, boxShadow: color === c ? `0 0 12px ${c}` : 'none' }}
+                />
+              ))}
+            </div>
+          </div>
+
+          <div className="flex gap-2 pt-2">
+            <button type="button" onClick={onCancel} className="flex-1 px-4 py-2 rounded-lg bg-cyan-950/30 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-900/30 text-sm font-mono">
+              CANCELAR
+            </button>
+            <button type="submit" className="flex-1 px-4 py-2 rounded-lg bg-cyan-500/20 border border-cyan-400/50 text-cyan-300 hover:bg-cyan-500/30 text-sm font-mono flex items-center justify-center gap-2">
+              <Check className="w-4 h-4" />
+              GUARDAR
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
 // ===== COMPONENTE PRINCIPAL =====
 const MapComponent = () => {
   const { position, error, loading } = useGeolocation();
   const [mapInstance, setMapInstance] = useState(null);
   
-  // Modos: null | 'area' | 'marker'
   const [mode, setMode] = useState(null);
   const [selectedColor, setSelectedColor] = useState(COLOR_PALETTE[0]);
   
-  // Áreas
   const [areas, setAreas] = useState([]);
   const [drawingPoints, setDrawingPoints] = useState([]);
   
-  // Marcadores
   const [markers, setMarkers] = useState([]);
-  const [activeMarker, setActiveMarker] = useState(null);
-  const [particleOrigin, setParticleOrigin] = useState(null);
   const [showMarkerForm, setShowMarkerForm] = useState(false);
   const [pendingMarkerPos, setPendingMarkerPos] = useState(null);
   
   const [showAreasList, setShowAreasList] = useState(false);
   const [isSyncing, setIsSyncing] = useState(true);
 
-  // Cargar datos desde Supabase
+  // ===== CARGA INICIAL =====
   useEffect(() => {
     const loadData = async () => {
-      const [{ data: areasData }, { data: markersData }] = await Promise.all([
-        supabase.from('areas').select('*').order('created_at', { ascending: false }),
-        supabase.from('markers').select('*').order('created_at', { ascending: false }),
-      ]);
-      
-      if (areasData) setAreas(areasData);
-      if (markersData) setMarkers(markersData);
-      setIsSyncing(false);
+      try {
+        const [{ data: areasData, error: areasErr }, { data: markersData, error: markersErr }] = await Promise.all([
+          supabase.from('areas').select('*').order('created_at', { ascending: false }),
+          supabase.from('markers').select('*').order('created_at', { ascending: false }),
+        ]);
+        
+        if (areasErr) console.error('Error áreas:', areasErr);
+        if (markersErr) console.error('Error markers:', markersErr);
+        
+        if (areasData) setAreas(areasData);
+        if (markersData) setMarkers(markersData);
+      } catch (err) {
+        console.error('Error cargando datos:', err);
+      } finally {
+        setIsSyncing(false);
+      }
     };
+    
     loadData();
+  }, []);
 
-    // Suscripciones en tiempo real
+  // ===== SUSCRIPCIONES EN TIEMPO REAL (CORREGIDO) =====
+  useEffect(() => {
+    // Suscripción para áreas
     const areasChannel = supabase
-      .channel('areas-channel')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'areas' }, (payload) => {
-        if (payload.eventType === 'INSERT') setAreas(prev => [payload.new, ...prev]);
-        if (payload.eventType === 'DELETE') setAreas(prev => prev.filter(a => a.id !== payload.old.id));
-      })
-      .subscribe();
+      .channel('areas-realtime')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'areas' },
+        (payload) => {
+          console.log('Nueva área recibida:', payload.new);
+          setAreas((prev) => {
+            // Evitar duplicados
+            if (prev.find(a => a.id === payload.new.id)) return prev;
+            return [payload.new, ...prev];
+          });
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'DELETE', schema: 'public', table: 'areas' },
+        (payload) => {
+          console.log('Área eliminada:', payload.old);
+          setAreas((prev) => prev.filter(a => a.id !== payload.old.id));
+        }
+      )
+      .subscribe((status) => {
+        console.log('Status suscripción áreas:', status);
+      });
 
+    // Suscripción para marcadores
     const markersChannel = supabase
-      .channel('markers-channel')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'markers' }, (payload) => {
-        if (payload.eventType === 'INSERT') setMarkers(prev => [payload.new, ...prev]);
-        if (payload.eventType === 'DELETE') setMarkers(prev => prev.filter(m => m.id !== payload.old.id));
-      })
-      .subscribe();
+      .channel('markers-realtime')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'markers' },
+        (payload) => {
+          console.log('Nuevo marcador recibido:', payload.new);
+          setMarkers((prev) => {
+            if (prev.find(m => m.id === payload.new.id)) return prev;
+            return [payload.new, ...prev];
+          });
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'DELETE', schema: 'public', table: 'markers' },
+        (payload) => {
+          console.log('Marcador eliminado:', payload.old);
+          setMarkers((prev) => prev.filter(m => m.id !== payload.old.id));
+        }
+      )
+      .subscribe((status) => {
+        console.log('Status suscripción marcadores:', status);
+      });
 
     return () => {
-      areasChannel.unsubscribe();
-      markersChannel.unsubscribe();
+      supabase.removeChannel(areasChannel);
+      supabase.removeChannel(markersChannel);
     };
   }, []);
 
@@ -390,7 +358,15 @@ const MapComponent = () => {
       fill_opacity: selectedColor.fillOpacity,
       stroke_opacity: selectedColor.strokeOpacity,
     };
-    await supabase.from('areas').insert([newArea]);
+    
+    const { data, error } = await supabase.from('areas').insert([newArea]).select();
+    if (error) {
+      alert('Error guardando: ' + error.message);
+    } else if (data) {
+      // Forzar actualización inmediata en el estado local también
+      setAreas(prev => [data[0], ...prev]);
+    }
+    
     setDrawingPoints([]);
     setMode(null);
   }, [drawingPoints, selectedColor, areas.length]);
@@ -404,45 +380,44 @@ const MapComponent = () => {
 
   const deleteArea = async (id) => {
     if (!confirm('¿Eliminar esta área?')) return;
-    await supabase.from('areas').delete().eq('id', id);
-    setAreas(prev => prev.filter(a => a.id !== id));
+    const { error } = await supabase.from('areas').delete().eq('id', id);
+    if (error) alert('Error: ' + error.message);
+    else setAreas(prev => prev.filter(a => a.id !== id));
   };
 
   // ===== LÓGICA MARCADORES =====
-  const handleMapClickForMarker = (latLng, containerPoint) => {
-    setPendingMarkerPos({ ...latLng, px: containerPoint.x, py: containerPoint.y });
+  const handleMapClickForMarker = (latLng) => {
+    setPendingMarkerPos(latLng);
     setShowMarkerForm(true);
   };
 
   const saveMarker = async (data) => {
-    const { error } = await supabase.from('markers').insert([{
-      name: data.name,
-      description: data.description,
-      lat: data.lat,
-      lng: data.lng,
-      color: data.color,
-    }]);
+    const { data: result, error } = await supabase
+      .from('markers')
+      .insert([{
+        name: data.name,
+        description: data.description,
+        lat: data.lat,
+        lng: data.lng,
+        color: data.color,
+      }])
+      .select();
     
     if (error) {
-      alert('Error guardando marcador: ' + error.message);
-    } else {
+      alert('Error: ' + error.message);
+    } else if (result) {
+      // Forzar actualización inmediata
+      setMarkers(prev => [result[0], ...prev]);
       setShowMarkerForm(false);
       setPendingMarkerPos(null);
       setMode(null);
     }
   };
 
-  const handleMarkerClick = (marker, containerPoint) => {
-    setParticleOrigin({ x: containerPoint.x, y: containerPoint.y, color: marker.color });
-    setActiveMarker(marker);
-    
-    // Limpiar partículas después de la animación
-    setTimeout(() => setParticleOrigin(null), 1000);
-  };
-
   const deleteMarker = async (id) => {
-    await supabase.from('markers').delete().eq('id', id);
-    setMarkers(prev => prev.filter(m => m.id !== id));
+    const { error } = await supabase.from('markers').delete().eq('id', id);
+    if (error) alert('Error: ' + error.message);
+    else setMarkers(prev => prev.filter(m => m.id !== id));
   };
 
   const loadPredefinedArea = async () => {
@@ -453,10 +428,9 @@ const MapComponent = () => {
       fill_opacity: selectedColor.fillOpacity,
       stroke_opacity: selectedColor.strokeOpacity,
     };
-    await supabase.from('areas').insert([predefined]);
-    if (mapInstance) {
-      mapInstance.fitBounds(L.latLngBounds(predefined.coordinates), { padding: [50, 50] });
-    }
+    const { data } = await supabase.from('areas').insert([predefined]).select();
+    if (data) setAreas(prev => [data[0], ...prev]);
+    if (mapInstance) mapInstance.fitBounds(L.latLngBounds(predefined.coordinates), { padding: [50, 50] });
   };
 
   const exportData = () => {
@@ -533,11 +507,10 @@ const MapComponent = () => {
         </div>
       </div>
 
-      {/* Controles Laterales */}
+      {/* Controles */}
       <div className="absolute top-28 left-4 z-[1000] flex flex-col gap-3">
         <div className="glass-panel rounded-2xl p-3 shadow-glass bg-gray-900/80 border-cyan-500/20 flex flex-col gap-2">
           
-          {/* Dibujar Área */}
           <button
             onClick={() => setMode(mode === 'area' ? null : 'area')}
             className={`p-3 rounded-xl transition-all flex items-center gap-2 border ${mode === 'area' ? 'bg-blue-600/80 border-blue-400 text-white' : 'bg-cyan-950/30 border-cyan-500/20 text-cyan-300 hover:bg-cyan-900/30'}`}
@@ -558,7 +531,6 @@ const MapComponent = () => {
             </button>
           )}
 
-          {/* Agregar Marcador */}
           <button
             onClick={() => setMode(mode === 'marker' ? null : 'marker')}
             className={`p-3 rounded-xl transition-all flex items-center gap-2 border ${mode === 'marker' ? 'bg-purple-600/80 border-purple-400 text-white' : 'bg-cyan-950/30 border-cyan-500/20 text-cyan-300 hover:bg-cyan-900/30'}`}
@@ -616,7 +588,7 @@ const MapComponent = () => {
             <p className="text-xs text-cyan-600 font-mono text-center py-4">SIN DATOS</p>
           ) : (
             <div className="space-y-3">
-              {markers.map((m, i) => (
+              {markers.map((m) => (
                 <div key={m.id} className="bg-cyan-950/20 border border-cyan-500/10 rounded-xl p-3 flex items-center justify-between group hover:border-cyan-500/30 transition-all">
                   <div className="flex items-center gap-3">
                     <div className="w-3 h-3 rounded-full" style={{ backgroundColor: m.color, boxShadow: `0 0 8px ${m.color}` }} />
@@ -649,7 +621,7 @@ const MapComponent = () => {
         </div>
       )}
 
-      {/* Instrucciones según modo */}
+      {/* Instrucciones */}
       {mode === 'area' && (
         <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 z-[1000] bg-gray-900/90 border border-blue-500/30 text-blue-200 px-6 py-3 rounded-xl shadow-2xl flex items-center gap-3 backdrop-blur-md">
           <MousePointer2 className="w-5 h-5 text-blue-400 animate-bounce" />
@@ -664,20 +636,6 @@ const MapComponent = () => {
           <MapPin className="w-5 h-5 text-purple-400 animate-bounce" />
           <span className="font-mono text-sm">CLIC EN EL MAPA PARA COLOCAR MARCADOR</span>
         </div>
-      )}
-
-      {/* Partículas */}
-      {particleOrigin && (
-        <ParticleBurst x={particleOrigin.x} y={particleOrigin.y} color={particleOrigin.color} />
-      )}
-
-      {/* Modal Holográfico (ver marcador) */}
-      {activeMarker && (
-        <HolographicModal 
-          marker={activeMarker} 
-          onClose={() => setActiveMarker(null)} 
-          onDelete={deleteMarker}
-        />
       )}
 
       {/* Formulario nuevo marcador */}
@@ -732,12 +690,12 @@ const MapComponent = () => {
           />
         ))}
 
-        {/* Marcadores animados */}
+        {/* Marcadores con tooltip inline */}
         {markers.map((marker) => (
-          <AnimatedMarker 
+          <CustomMarker 
             key={marker.id} 
             marker={marker} 
-            onClick={handleMarkerClick}
+            onDelete={deleteMarker}
           />
         ))}
 
