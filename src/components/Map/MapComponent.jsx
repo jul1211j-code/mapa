@@ -10,7 +10,7 @@ import {
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 
-// Fix Leaflet icons
+// Fix Leaflet icons (importante hacerlo ANTES de usar cualquier marcador)
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
@@ -55,86 +55,94 @@ function escapeHtml(str) {
   });
 }
 
-// ===== MARCADOR CUSTOM CON POPUP HOLOGRÁFICO =====
+// ===== MARCADOR CUSTOM CON POPUP (VERSIÓN SEGURA) =====
 const CustomMarker = ({ marker, onDelete }) => {
   const map = useMap();
   
   useEffect(() => {
-    const customIcon = L.divIcon({
-      className: 'custom-marker',
-      html: `
-        <div class="marker-pin-container">
-          <div class="marker-pin" style="--marker-color: ${marker.color}"></div>
-          <div class="marker-pulse" style="--marker-color: ${marker.color}"></div>
-        </div>
-      `,
-      iconSize: [32, 32],
-      iconAnchor: [16, 16],
-    });
+    // Validar que el mapa esté listo
+    if (!map) {
+      console.error('CustomMarker: mapa no disponible');
+      return;
+    }
+    
+    try {
+      const customIcon = L.divIcon({
+        className: 'custom-marker',
+        html: `
+          <div class="marker-pin-container">
+            <div class="marker-pin" style="--marker-color: ${marker.color}"></div>
+            <div class="marker-pulse" style="--marker-color: ${marker.color}"></div>
+          </div>
+        `,
+        iconSize: [32, 32],
+        iconAnchor: [16, 16],
+      });
 
-    const leafletMarker = L.marker([marker.lat, marker.lng], { icon: customIcon }).addTo(map);
-    
-    // Contenido HTML del popup (diseño holográfico)
-    const popupContent = `
-      <div class="hologram-card p-4 min-w-[240px] max-w-sm relative" style="animation: none; box-shadow: 0 0 20px rgba(6,182,212,0.3);">
-        <div class="absolute top-0 left-0 w-3 h-3 border-t-2 border-l-2 border-cyan-400 rounded-tl-md"></div>
-        <div class="absolute top-0 right-0 w-3 h-3 border-t-2 border-r-2 border-cyan-400 rounded-tr-md"></div>
-        <div class="absolute bottom-0 left-0 w-3 h-3 border-b-2 border-l-2 border-cyan-400 rounded-bl-md"></div>
-        <div class="absolute bottom-0 right-0 w-3 h-3 border-b-2 border-r-2 border-cyan-400 rounded-br-md"></div>
-        
-        <div class="flex items-center gap-2 mb-3">
-          <div class="w-3 h-3 rounded-full" style="background: ${marker.color}; box-shadow: 0 0 8px ${marker.color};"></div>
-          <h3 class="text-sm font-bold text-cyan-50 font-mono tracking-wider">${escapeHtml(marker.name)}</h3>
+      const leafletMarker = L.marker([marker.lat, marker.lng], { icon: customIcon }).addTo(map);
+      
+      const popupContent = `
+        <div class="hologram-card p-4 min-w-[240px] max-w-sm relative" style="animation: none; box-shadow: 0 0 20px rgba(6,182,212,0.3);">
+          <div class="absolute top-0 left-0 w-3 h-3 border-t-2 border-l-2 border-cyan-400 rounded-tl-md"></div>
+          <div class="absolute top-0 right-0 w-3 h-3 border-t-2 border-r-2 border-cyan-400 rounded-tr-md"></div>
+          <div class="absolute bottom-0 left-0 w-3 h-3 border-b-2 border-l-2 border-cyan-400 rounded-bl-md"></div>
+          <div class="absolute bottom-0 right-0 w-3 h-3 border-b-2 border-r-2 border-cyan-400 rounded-br-md"></div>
+          
+          <div class="flex items-center gap-2 mb-3">
+            <div class="w-3 h-3 rounded-full" style="background: ${marker.color}; box-shadow: 0 0 8px ${marker.color};"></div>
+            <h3 class="text-sm font-bold text-cyan-50 font-mono tracking-wider">${escapeHtml(marker.name)}</h3>
+          </div>
+          
+          <div class="h-px w-full bg-gradient-to-r from-transparent via-cyan-500/50 to-transparent mb-3"></div>
+          
+          <div class="text-xs text-cyan-100/80 font-mono leading-relaxed mb-3">
+            ${escapeHtml(marker.description) || '<span class="text-cyan-500/50">Sin descripción</span>'}
+          </div>
+          
+          <div class="grid grid-cols-2 gap-1 mb-2 text-[9px]">
+            <div><span class="text-cyan-500/50">LAT:</span> ${marker.lat.toFixed(5)}</div>
+            <div><span class="text-cyan-500/50">LNG:</span> ${marker.lng.toFixed(5)}</div>
+          </div>
+          
+          <div class="flex justify-end">
+            <button id="delete-marker-${marker.id}" class="delete-marker-btn text-red-400 hover:text-red-300 text-[10px] font-mono transition flex items-center gap-1 bg-red-500/10 px-2 py-1 rounded">
+              🗑️ ELIMINAR
+            </button>
+          </div>
         </div>
-        
-        <div class="h-px w-full bg-gradient-to-r from-transparent via-cyan-500/50 to-transparent mb-3"></div>
-        
-        <div class="text-xs text-cyan-100/80 font-mono leading-relaxed mb-3">
-          ${escapeHtml(marker.description) || '<span class="text-cyan-500/50">Sin descripción</span>'}
-        </div>
-        
-        <div class="grid grid-cols-2 gap-1 mb-2 text-[9px]">
-          <div><span class="text-cyan-500/50">LAT:</span> ${marker.lat.toFixed(5)}</div>
-          <div><span class="text-cyan-500/50">LNG:</span> ${marker.lng.toFixed(5)}</div>
-        </div>
-        
-        <div class="flex justify-end">
-          <button id="delete-marker-${marker.id}" class="delete-marker-btn text-red-400 hover:text-red-300 text-[10px] font-mono transition flex items-center gap-1 bg-red-500/10 px-2 py-1 rounded">
-            🗑️ ELIMINAR
-          </button>
-        </div>
-      </div>
-    `;
-    
-    leafletMarker.bindPopup(popupContent, {
-      className: 'custom-hologram-popup',
-      closeButton: true,
-      closeOnClick: false,
-      autoPan: true,
-      offset: [0, -20]
-    });
-    
-    // Manejar evento de eliminación desde el popup
-    leafletMarker.on('popupopen', () => {
-      const deleteBtn = document.getElementById(`delete-marker-${marker.id}`);
-      if (deleteBtn) {
-        deleteBtn.onclick = (e) => {
-          e.stopPropagation();
-          onDelete(marker.id);
-          leafletMarker.closePopup();
-        };
-      }
-    });
-    
-    return () => {
-      map.removeLayer(leafletMarker);
-    };
+      `;
+      
+      leafletMarker.bindPopup(popupContent, {
+        className: 'custom-hologram-popup',
+        closeButton: true,
+        closeOnClick: false,
+        autoPan: true,
+        offset: [0, -20]
+      });
+      
+      leafletMarker.on('popupopen', () => {
+        const deleteBtn = document.getElementById(`delete-marker-${marker.id}`);
+        if (deleteBtn) {
+          deleteBtn.onclick = (e) => {
+            e.stopPropagation();
+            onDelete(marker.id);
+            leafletMarker.closePopup();
+          };
+        }
+      });
+      
+      return () => {
+        if (map && leafletMarker) map.removeLayer(leafletMarker);
+      };
+    } catch (err) {
+      console.error('Error creando marcador:', err);
+    }
   }, [marker, map, onDelete]);
   
   return null;
 };
 
-// ===== HANDLER DE DIBUJO =====
+// ===== HANDLER DE DIBUJO (SEGURO) =====
 const DrawingHandler = ({ mode, onPointAdd, points, onFinish, onCancel, onMapClick }) => {
   const map = useMap();
   
@@ -155,9 +163,9 @@ const DrawingHandler = ({ mode, onPointAdd, points, onFinish, onCancel, onMapCli
     const handleKeyDown = (e) => { if (e.key === 'Escape') onCancel(); };
     if (mode) {
       window.addEventListener('keydown', handleKeyDown);
-      map.getContainer().style.cursor = 'crosshair';
+      if (map && map.getContainer) map.getContainer().style.cursor = 'crosshair';
     } else {
-      map.getContainer().style.cursor = '';
+      if (map && map.getContainer) map.getContainer().style.cursor = '';
     }
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [mode, map, onCancel]);
@@ -165,20 +173,32 @@ const DrawingHandler = ({ mode, onPointAdd, points, onFinish, onCancel, onMapCli
   return null;
 };
 
+// ===== PREVIEW DE DIBUJO (SEGURO) =====
 const DrawingPreview = ({ points, color, map }) => {
   useEffect(() => {
-    if (points.length < 2 || !map) return;
-    const polyline = L.polyline(points, { color, weight: 3, opacity: 0.7, dashArray: '5, 10' }).addTo(map);
-    const markers = points.map((point, i) => 
-      L.circleMarker(point, { radius: 6, fillColor: color, color: '#fff', weight: 2, opacity: 1, fillOpacity: 1 })
-        .addTo(map).bindPopup(`Punto ${i + 1}`)
-    );
-    return () => { map.removeLayer(polyline); markers.forEach(m => map.removeLayer(m)); };
+    if (!map || points.length < 2) return;
+    
+    try {
+      const polyline = L.polyline(points, { color, weight: 3, opacity: 0.7, dashArray: '5, 10' }).addTo(map);
+      const markers = points.map((point, i) => 
+        L.circleMarker(point, { radius: 6, fillColor: color, color: '#fff', weight: 2, opacity: 1, fillOpacity: 1 })
+          .addTo(map).bindPopup(`Punto ${i + 1}`)
+      );
+      return () => { 
+        if (map) {
+          map.removeLayer(polyline); 
+          markers.forEach(m => map.removeLayer(m)); 
+        }
+      };
+    } catch (err) {
+      console.error('Error en DrawingPreview:', err);
+    }
   }, [points, color, map]);
+  
   return null;
 };
 
-// ===== FORMULARIO MARCADOR =====
+// ===== FORMULARIO MARCADOR (igual) =====
 const MarkerFormModal = ({ position, onSave, onCancel }) => {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -254,6 +274,7 @@ const MapComponent = () => {
   const [showDataList, setShowDataList] = useState(false);
   const [dataLoaded, setDataLoaded] = useState(false);
   const [dataError, setDataError] = useState(null);
+  const [fatalError, setFatalError] = useState(null);
 
   // ===== CARGAR DATOS =====
   useEffect(() => {
@@ -275,6 +296,7 @@ const MapComponent = () => {
         setDataLoaded(true);
       } catch (err) {
         if (!cancelled) {
+          console.error('Error cargando datos:', err);
           setDataError(err.message);
           setDataLoaded(true);
         }
@@ -443,7 +465,13 @@ const MapComponent = () => {
     );
   }
 
-  const defaultPosition = position || { lat: 40.4168, lng: -3.7038 };
+  // Asegurar que siempre haya una posición por defecto
+  const defaultPosition = position && position.lat && position.lng ? position : { lat: 40.4168, lng: -3.7038 };
+  
+  // Validación extra por si falla el mapa
+  if (!defaultPosition.lat || !defaultPosition.lng) {
+    return <ErrorDisplay title="ERROR DE COORDENADAS" message="No se pudo determinar una ubicación inicial" onRetry={() => window.location.reload()} />;
+  }
 
   return (
     <div className="relative h-screen w-full bg-gray-900">
@@ -592,12 +620,20 @@ const MapComponent = () => {
           onCancel={() => { setShowMarkerForm(false); setPendingMarkerPos(null); setMode(null); }} />
       )}
 
-      {/* MAPA */}
-      <MapContainer center={[defaultPosition.lat, defaultPosition.lng]} zoom={16}
-        scrollWheelZoom={true} className="h-full w-full" whenCreated={setMapInstance}>
-        
-        <TileLayer attribution='&copy; OpenStreetMap contributors'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+      {/* MAPA - con manejo de errores adicional */}
+      <MapContainer 
+        key="map-container"
+        center={[defaultPosition.lat, defaultPosition.lng]} 
+        zoom={16}
+        scrollWheelZoom={true} 
+        className="h-full w-full" 
+        whenCreated={setMapInstance}
+        style={{ height: '100%', width: '100%' }}
+      >
+        <TileLayer 
+          attribution='&copy; OpenStreetMap contributors'
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" 
+        />
 
         <DrawingHandler mode={mode} onPointAdd={addDrawingPoint} points={drawingPoints}
           onFinish={finishDrawing} onCancel={cancelMode} onMapClick={handleMapClickForMarker} />
@@ -622,7 +658,7 @@ const MapComponent = () => {
         ))}
 
         {/* Ubicación actual */}
-        {position && (
+        {position && position.lat && position.lng && (
           <CircleMarker center={[position.lat, position.lng]} radius={8}
             pathOptions={{ color: '#3b82f6', fillColor: '#3b82f6', fillOpacity: 0.8, weight: 2 }} />
         )}
