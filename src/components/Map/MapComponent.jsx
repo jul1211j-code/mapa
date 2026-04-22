@@ -10,7 +10,7 @@ import {
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 
-// Fix Leaflet icons (importante hacerlo ANTES de usar cualquier marcador)
+// Fix Leaflet icons
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
@@ -44,7 +44,7 @@ const ErrorDisplay = ({ title, message, onRetry }) => (
   </div>
 );
 
-// ===== FUNCIÓN PARA ESCAPAR HTML =====
+// ===== FUNCIÓN PARA ESCAPAR HTML Y FORMATEAR COORDENADAS =====
 function escapeHtml(str) {
   if (!str) return '';
   return str.replace(/[&<>]/g, function(m) {
@@ -55,14 +55,24 @@ function escapeHtml(str) {
   });
 }
 
-// ===== MARCADOR CUSTOM CON POPUP (VERSIÓN SEGURA) =====
+function formatCoordinate(value) {
+  const num = typeof value === 'number' ? value : parseFloat(value);
+  return isNaN(num) ? '0.00000' : num.toFixed(5);
+}
+
+// ===== MARCADOR CUSTOM CON POPUP (CORREGIDO) =====
 const CustomMarker = ({ marker, onDelete }) => {
   const map = useMap();
   
   useEffect(() => {
-    // Validar que el mapa esté listo
-    if (!map) {
-      console.error('CustomMarker: mapa no disponible');
+    if (!map) return;
+    
+    // Asegurar que lat/lng sean números
+    const lat = typeof marker.lat === 'number' ? marker.lat : parseFloat(marker.lat);
+    const lng = typeof marker.lng === 'number' ? marker.lng : parseFloat(marker.lng);
+    
+    if (isNaN(lat) || isNaN(lng)) {
+      console.error('Coordenadas inválidas para marcador:', marker);
       return;
     }
     
@@ -79,7 +89,11 @@ const CustomMarker = ({ marker, onDelete }) => {
         iconAnchor: [16, 16],
       });
 
-      const leafletMarker = L.marker([marker.lat, marker.lng], { icon: customIcon }).addTo(map);
+      const leafletMarker = L.marker([lat, lng], { icon: customIcon }).addTo(map);
+      
+      // Usar la función formatCoordinate para evitar errores
+      const formattedLat = formatCoordinate(lat);
+      const formattedLng = formatCoordinate(lng);
       
       const popupContent = `
         <div class="hologram-card p-4 min-w-[240px] max-w-sm relative" style="animation: none; box-shadow: 0 0 20px rgba(6,182,212,0.3);">
@@ -100,8 +114,8 @@ const CustomMarker = ({ marker, onDelete }) => {
           </div>
           
           <div class="grid grid-cols-2 gap-1 mb-2 text-[9px]">
-            <div><span class="text-cyan-500/50">LAT:</span> ${marker.lat.toFixed(5)}</div>
-            <div><span class="text-cyan-500/50">LNG:</span> ${marker.lng.toFixed(5)}</div>
+            <div><span class="text-cyan-500/50">LAT:</span> ${formattedLat}</div>
+            <div><span class="text-cyan-500/50">LNG:</span> ${formattedLng}</div>
           </div>
           
           <div class="flex justify-end">
@@ -142,7 +156,7 @@ const CustomMarker = ({ marker, onDelete }) => {
   return null;
 };
 
-// ===== HANDLER DE DIBUJO (SEGURO) =====
+// ===== HANDLER DE DIBUJO =====
 const DrawingHandler = ({ mode, onPointAdd, points, onFinish, onCancel, onMapClick }) => {
   const map = useMap();
   
@@ -173,7 +187,7 @@ const DrawingHandler = ({ mode, onPointAdd, points, onFinish, onCancel, onMapCli
   return null;
 };
 
-// ===== PREVIEW DE DIBUJO (SEGURO) =====
+// ===== PREVIEW DE DIBUJO =====
 const DrawingPreview = ({ points, color, map }) => {
   useEffect(() => {
     if (!map || points.length < 2) return;
@@ -198,7 +212,7 @@ const DrawingPreview = ({ points, color, map }) => {
   return null;
 };
 
-// ===== FORMULARIO MARCADOR (igual) =====
+// ===== FORMULARIO MARCADOR =====
 const MarkerFormModal = ({ position, onSave, onCancel }) => {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -274,7 +288,6 @@ const MapComponent = () => {
   const [showDataList, setShowDataList] = useState(false);
   const [dataLoaded, setDataLoaded] = useState(false);
   const [dataError, setDataError] = useState(null);
-  const [fatalError, setFatalError] = useState(null);
 
   // ===== CARGAR DATOS =====
   useEffect(() => {
@@ -465,13 +478,7 @@ const MapComponent = () => {
     );
   }
 
-  // Asegurar que siempre haya una posición por defecto
-  const defaultPosition = position && position.lat && position.lng ? position : { lat: 40.4168, lng: -3.7038 };
-  
-  // Validación extra por si falla el mapa
-  if (!defaultPosition.lat || !defaultPosition.lng) {
-    return <ErrorDisplay title="ERROR DE COORDENADAS" message="No se pudo determinar una ubicación inicial" onRetry={() => window.location.reload()} />;
-  }
+  const defaultPosition = position || { lat: 40.4168, lng: -3.7038 };
 
   return (
     <div className="relative h-screen w-full bg-gray-900">
@@ -620,15 +627,13 @@ const MapComponent = () => {
           onCancel={() => { setShowMarkerForm(false); setPendingMarkerPos(null); setMode(null); }} />
       )}
 
-      {/* MAPA - con manejo de errores adicional */}
+      {/* MAPA */}
       <MapContainer 
-        key="map-container"
         center={[defaultPosition.lat, defaultPosition.lng]} 
         zoom={16}
         scrollWheelZoom={true} 
         className="h-full w-full" 
         whenCreated={setMapInstance}
-        style={{ height: '100%', width: '100%' }}
       >
         <TileLayer 
           attribution='&copy; OpenStreetMap contributors'
@@ -658,7 +663,7 @@ const MapComponent = () => {
         ))}
 
         {/* Ubicación actual */}
-        {position && position.lat && position.lng && (
+        {position && (
           <CircleMarker center={[position.lat, position.lng]} radius={8}
             pathOptions={{ color: '#3b82f6', fillColor: '#3b82f6', fillOpacity: 0.8, weight: 2 }} />
         )}
