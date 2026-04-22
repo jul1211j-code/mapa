@@ -1,11 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { MapContainer, TileLayer, Polygon, CircleMarker, useMap, useMapEvents, Popup, Marker } from 'react-leaflet';
+import { MapContainer, TileLayer, Polygon, CircleMarker, useMap, useMapEvents } from 'react-leaflet';
 import { useGeolocation } from '../../hooks/useGeolocation';
 import { supabase } from '../../utils/supabaseClient';
 import { 
   MousePointer2, Trash2, Check, X, 
   Navigation, Square, Download, Globe, MapPin, 
-  Plus, Sparkles, Crosshair, AlertTriangle
+  Plus, Sparkles, Crosshair, AlertTriangle, XCircle
 } from 'lucide-react';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
@@ -29,82 +29,145 @@ const MARKER_COLORS = [
   '#06b6d4', '#8b5cf6', '#ec4899', '#10b981', '#f59e0b', '#ef4444'
 ];
 
-// ===== COMPONENTE DE ERROR VISUAL =====
+// ===== COMPONENTE DE ERROR =====
 const ErrorDisplay = ({ title, message, onRetry }) => (
   <div className="h-screen w-full flex items-center justify-center bg-gray-900 p-4">
     <div className="hologram-card relative max-w-md w-full rounded-2xl p-8 text-center">
       <AlertTriangle className="w-16 h-16 text-red-400 mx-auto mb-4" />
       <h2 className="text-xl font-bold text-cyan-50 font-mono mb-2">{title}</h2>
       <p className="text-cyan-300/70 mb-6 text-sm">{message}</p>
-      <button 
-        onClick={onRetry}
-        className="px-6 py-3 bg-cyan-500/20 border border-cyan-400/50 rounded-lg text-cyan-300 hover:bg-cyan-500/30 transition-all font-mono text-sm"
-      >
+      <button onClick={onRetry}
+        className="px-6 py-3 bg-cyan-500/20 border border-cyan-400/50 rounded-lg text-cyan-300 hover:bg-cyan-500/30 transition-all font-mono text-sm">
         REINTENTAR
       </button>
     </div>
   </div>
 );
 
-// ===== POPUP HOLOGRÁFICO =====
-const HolographicPopup = ({ marker }) => (
-  <div className="holographic-tooltip min-w-[260px] max-w-[300px]">
-    <div className="flex items-center gap-2 mb-3 pb-2 border-b border-cyan-500/30">
-      <div 
-        className="w-3 h-3 rounded-full animate-pulse"
-        style={{ backgroundColor: marker.color, boxShadow: `0 0 10px ${marker.color}` }}
-      />
-      <h3 className="text-sm font-bold text-cyan-50 font-mono tracking-wider uppercase">
-        {marker.name}
-      </h3>
-    </div>
-    <div className="group/description relative">
-      <div className="flex items-center gap-2 text-cyan-400/60 text-[10px] font-mono mb-1">
-        <Sparkles className="w-3 h-3" />
-        <span>DESCRIPCIÓN</span>
-      </div>
-      <p className="text-sm text-cyan-100/80 leading-relaxed pr-1 hologram-scroll max-h-28 overflow-y-auto">
-        {marker.description || 'Sin descripción disponible.'}
-      </p>
-      <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-cyan-500/0 to-transparent group-hover/description:via-cyan-500/60 transition-all duration-500" />
-    </div>
-    <div className="mt-3 pt-2 border-t border-cyan-500/20 grid grid-cols-2 gap-2 text-[9px] font-mono text-cyan-500/50">
-      <div><span className="text-cyan-500/30 block">LAT</span>{marker.lat?.toFixed(6)}</div>
-      <div><span className="text-cyan-500/30 block">LNG</span>{marker.lng?.toFixed(6)}</div>
-    </div>
-    <div className="mt-2 text-[8px] text-cyan-600/40 font-mono text-right">
-      {new Date(marker.created_at).toLocaleString()}
-    </div>
-  </div>
-);
-
-// ===== MARCADOR CUSTOM =====
-const CustomMarker = ({ marker }) => {
-  const customIcon = L.divIcon({
-    className: 'custom-marker',
-    html: `
-      <div class="marker-pin-container">
-        <div class="marker-pin" style="--marker-color: ${marker.color}"></div>
-        <div class="marker-pulse" style="--marker-color: ${marker.color}"></div>
-      </div>
-    `,
-    iconSize: [32, 32],
-    iconAnchor: [16, 16],
-    popupAnchor: [0, -20],
-  });
+// ===== TOOLTIP/MODAL FLOTANTE PARA MARCADORES =====
+const MarkerTooltip = ({ marker, onClose, onDelete }) => {
+  if (!marker) return null;
 
   return (
-    <Marker position={[marker.lat, marker.lng]} icon={customIcon}>
-      <Popup 
-        className="holographic-popup"
-        closeButton={true}
-        autoPan={true}
-        autoPanPadding={[50, 50]}
+    <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      
+      <div 
+        className="hologram-card relative w-full max-w-sm rounded-2xl p-6 text-cyan-50 animate-in fade-in zoom-in duration-200"
+        onClick={(e) => e.stopPropagation()}
       >
-        <HolographicPopup marker={marker} />
-      </Popup>
-    </Marker>
+        {/* Esquinas decorativas */}
+        <div className="absolute top-0 left-0 w-5 h-5 border-t-2 border-l-2 border-cyan-400 rounded-tl-xl" />
+        <div className="absolute top-0 right-0 w-5 h-5 border-t-2 border-r-2 border-cyan-400 rounded-tr-xl" />
+        <div className="absolute bottom-0 left-0 w-5 h-5 border-b-2 border-l-2 border-cyan-400 rounded-bl-xl" />
+        <div className="absolute bottom-0 right-0 w-5 h-5 border-b-2 border-r-2 border-cyan-400 rounded-br-xl" />
+
+        {/* Botón cerrar */}
+        <button 
+          onClick={onClose}
+          className="absolute top-3 right-3 text-cyan-500 hover:text-cyan-200 transition-colors z-10"
+        >
+          <XCircle className="w-5 h-5" />
+        </button>
+
+        {/* Header */}
+        <div className="flex items-center gap-3 mb-4 pr-6">
+          <div 
+            className="w-4 h-4 rounded-full animate-pulse flex-shrink-0"
+            style={{ 
+              backgroundColor: marker.color, 
+              boxShadow: `0 0 12px ${marker.color}, 0 0 24px ${marker.color}40` 
+            }}
+          />
+          <h3 className="text-lg font-bold text-cyan-50 font-mono tracking-wider uppercase leading-tight">
+            {marker.name}
+          </h3>
+        </div>
+
+        {/* Línea divisoria */}
+        <div className="h-px w-full bg-gradient-to-r from-transparent via-cyan-500/50 to-transparent mb-4" />
+
+        {/* Descripción */}
+        <div className="relative mb-4 group/description">
+          <div className="flex items-center gap-2 text-cyan-400/60 text-[10px] font-mono mb-2 uppercase tracking-widest">
+            <Sparkles className="w-3 h-3" />
+            <span>Descripción del lugar</span>
+          </div>
+          <div className="bg-cyan-950/20 border border-cyan-500/10 rounded-xl p-3">
+            <p className="text-sm text-cyan-100/90 leading-relaxed font-mono">
+              {marker.description || 'Sin descripción disponible.'}
+            </p>
+          </div>
+          {/* Efecto hover scanline */}
+          <div className="absolute inset-0 rounded-xl pointer-events-none opacity-0 group-hover/description:opacity-100 transition-opacity duration-500">
+            <div className="absolute inset-0 bg-gradient-to-b from-transparent via-cyan-400/5 to-transparent animate-scan" />
+          </div>
+        </div>
+
+        {/* Coordenadas */}
+        <div className="grid grid-cols-2 gap-2 mb-3">
+          <div className="bg-cyan-950/30 border border-cyan-500/15 rounded-lg p-2">
+            <span className="text-[9px] text-cyan-500/50 font-mono block mb-1">LATITUD</span>
+            <span className="text-xs text-cyan-300 font-mono">{marker.lat?.toFixed(6)}</span>
+          </div>
+          <div className="bg-cyan-950/30 border border-cyan-500/15 rounded-lg p-2">
+            <span className="text-[9px] text-cyan-500/50 font-mono block mb-1">LONGITUD</span>
+            <span className="text-xs text-cyan-300 font-mono">{marker.lng?.toFixed(6)}</span>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-between pt-2 border-t border-cyan-500/10">
+          <span className="text-[9px] text-cyan-600/50 font-mono">
+            ID: {marker.id?.slice(0, 8)}... • {new Date(marker.created_at).toLocaleDateString()}
+          </span>
+          <button
+            onClick={() => {
+              if (confirm('¿Eliminar este marcador permanentemente?')) {
+                onDelete(marker.id);
+                onClose();
+              }
+            }}
+            className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 transition-all text-[10px] font-mono"
+          >
+            <Trash2 className="w-3 h-3" />
+            ELIMINAR
+          </button>
+        </div>
+      </div>
+    </div>
   );
+};
+
+// ===== MARCADOR CUSTOM CON EVENTO DE CLIC =====
+const CustomMarker = ({ marker, onClick }) => {
+  const map = useMap();
+  
+  useEffect(() => {
+    const customIcon = L.divIcon({
+      className: 'custom-marker',
+      html: `
+        <div class="marker-pin-container">
+          <div class="marker-pin" style="--marker-color: ${marker.color}"></div>
+          <div class="marker-pulse" style="--marker-color: ${marker.color}"></div>
+        </div>
+      `,
+      iconSize: [32, 32],
+      iconAnchor: [16, 16],
+    });
+
+    const leafletMarker = L.marker([marker.lat, marker.lng], { icon: customIcon }).addTo(map);
+    
+    leafletMarker.on('click', () => {
+      onClick(marker);
+    });
+
+    return () => {
+      map.removeLayer(leafletMarker);
+    };
+  }, [marker, map, onClick]);
+
+  return null;
 };
 
 // ===== HANDLER DE DIBUJO =====
@@ -172,12 +235,11 @@ const MarkerFormModal = ({ position, onSave, onCancel }) => {
         <div className="absolute bottom-0 left-0 w-4 h-4 border-b-2 border-l-2 border-cyan-400 rounded-bl-lg" />
         <div className="absolute bottom-0 right-0 w-4 h-4 border-b-2 border-r-2 border-cyan-400 rounded-br-lg" />
         <h2 className="text-lg font-bold tracking-wider uppercase mb-4 flex items-center gap-2 font-mono">
-          <Sparkles className="w-5 h-5 text-cyan-400" />
-          NUEVO MARCADOR
+          <Sparkles className="w-5 h-5 text-cyan-400" />NUEVO MARCADOR
         </h2>
         <form onSubmit={handleSubmit} className="space-y-4 relative z-10">
           <div>
-            <label className="text-[10px] text-cyan-400 uppercase tracking-widest block mb-1 font-mono">Nombre</label>
+            <label className="text-[10px] text-cyan-400 uppercase tracking-widest block mb-1 font-mono">Nombre del lugar</label>
             <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Ej: Plaza Central"
               className="w-full bg-cyan-950/30 border border-cyan-500/30 rounded-lg px-3 py-2 text-sm text-cyan-100 placeholder-cyan-700 focus:outline-none focus:border-cyan-400 font-mono" autoFocus />
           </div>
@@ -222,12 +284,11 @@ const MapComponent = () => {
   const [drawingPoints, setDrawingPoints] = useState([]);
   
   const [markers, setMarkers] = useState([]);
+  const [selectedMarker, setSelectedMarker] = useState(null); // Marcador seleccionado para mostrar tooltip
   const [showMarkerForm, setShowMarkerForm] = useState(false);
   const [pendingMarkerPos, setPendingMarkerPos] = useState(null);
   
   const [showDataList, setShowDataList] = useState(false);
-  
-  // Estados de carga separados
   const [dataLoaded, setDataLoaded] = useState(false);
   const [dataError, setDataError] = useState(null);
 
@@ -237,30 +298,22 @@ const MapComponent = () => {
     
     const loadData = async () => {
       try {
-        console.log('🔄 Iniciando carga de datos...');
-        
         const [{ data: areasData, error: areasError }, { data: markersData, error: markersError }] = await Promise.all([
           supabase.from('areas').select('*').order('created_at', { ascending: false }),
           supabase.from('markers').select('*').order('created_at', { ascending: false }),
         ]);
         
         if (cancelled) return;
-        
         if (areasError) throw new Error(`Áreas: ${areasError.message}`);
         if (markersError) throw new Error(`Marcadores: ${markersError.message}`);
-        
-        console.log('✅ Áreas cargadas:', areasData?.length || 0);
-        console.log('✅ Marcadores cargados:', markersData?.length || 0);
         
         setAreas(areasData || []);
         setMarkers(markersData || []);
         setDataLoaded(true);
-        setDataError(null);
       } catch (err) {
-        console.error('❌ Error cargando datos:', err);
         if (!cancelled) {
           setDataError(err.message);
-          setDataLoaded(true); // Importante: marcar como cargado aunque haya error
+          setDataLoaded(true);
         }
       }
     };
@@ -271,33 +324,25 @@ const MapComponent = () => {
 
   // ===== SUSCRIPCIONES =====
   useEffect(() => {
-    if (!dataLoaded) return; // Solo suscribir después de cargar datos
+    if (!dataLoaded) return;
     
-    console.log('📡 Iniciando suscripciones en tiempo real...');
-    
-    const areasSub = supabase
-      .channel('areas-realtime')
+    const areasSub = supabase.channel('areas-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'areas' }, (payload) => {
-        console.log('📨 Cambio en áreas:', payload.eventType);
         if (payload.eventType === 'INSERT') {
           setAreas(prev => prev.find(a => a.id === payload.new.id) ? prev : [payload.new, ...prev]);
         } else if (payload.eventType === 'DELETE') {
           setAreas(prev => prev.filter(a => a.id !== payload.old.id));
         }
-      })
-      .subscribe();
+      }).subscribe();
 
-    const markersSub = supabase
-      .channel('markers-realtime')
+    const markersSub = supabase.channel('markers-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'markers' }, (payload) => {
-        console.log('📨 Cambio en marcadores:', payload.eventType);
         if (payload.eventType === 'INSERT') {
           setMarkers(prev => prev.find(m => m.id === payload.new.id) ? prev : [payload.new, ...prev]);
         } else if (payload.eventType === 'DELETE') {
           setMarkers(prev => prev.filter(m => m.id !== payload.old.id));
         }
-      })
-      .subscribe();
+      }).subscribe();
 
     return () => {
       supabase.removeChannel(areasSub);
@@ -319,16 +364,14 @@ const MapComponent = () => {
       stroke_opacity: selectedColor.strokeOpacity,
     };
     
-    // Optimista: mostrar inmediatamente
     const tempId = 'temp-' + Date.now();
     setAreas(prev => [{ ...newArea, id: tempId, created_at: new Date().toISOString() }, ...prev]);
     setDrawingPoints([]);
     setMode(null);
     
-    // Guardar en Supabase
     const { data, error } = await supabase.from('areas').insert([newArea]).select();
     if (error) {
-      alert('Error guardando: ' + error.message);
+      alert('Error: ' + error.message);
       setAreas(prev => prev.filter(a => a.id !== tempId));
     } else if (data) {
       setAreas(prev => prev.map(a => a.id === tempId ? data[0] : a));
@@ -344,11 +387,10 @@ const MapComponent = () => {
 
   const deleteArea = async (id) => {
     if (!confirm('¿Eliminar esta área?')) return;
-    setAreas(prev => prev.filter(a => a.id !== id)); // Optimista
+    setAreas(prev => prev.filter(a => a.id !== id));
     const { error } = await supabase.from('areas').delete().eq('id', id);
     if (error) {
-      alert('Error eliminando: ' + error.message);
-      // Recargar para sincronizar
+      alert('Error: ' + error.message);
       const { data } = await supabase.from('areas').select('*');
       setAreas(data || []);
     }
@@ -360,11 +402,19 @@ const MapComponent = () => {
     setShowMarkerForm(true);
   };
 
+  // Al hacer clic en un marcador existente
+  const handleMarkerClick = useCallback((marker) => {
+    setSelectedMarker(marker);
+  }, []);
+
+  const closeMarkerTooltip = useCallback(() => {
+    setSelectedMarker(null);
+  }, []);
+
   const saveMarker = async (data) => {
     const tempId = 'temp-' + Date.now();
     const tempMarker = { ...data, id: tempId, created_at: new Date().toISOString() };
     
-    // Optimista
     setMarkers(prev => [tempMarker, ...prev]);
     setShowMarkerForm(false);
     setPendingMarkerPos(null);
@@ -381,7 +431,7 @@ const MapComponent = () => {
 
   const deleteMarker = async (id) => {
     if (!confirm('¿Eliminar este marcador?')) return;
-    setMarkers(prev => prev.filter(m => m.id !== id)); // Optimista
+    setMarkers(prev => prev.filter(m => m.id !== id));
     const { error } = await supabase.from('markers').delete().eq('id', id);
     if (error) {
       alert('Error: ' + error.message);
@@ -417,19 +467,15 @@ const MapComponent = () => {
     if (mapInstance && position) mapInstance.flyTo([position.lat, position.lng], 18);
   };
 
-  // ===== PANTALLAS DE ESTADO =====
-  
-  // Error de geolocalización
+  // ===== RENDERIZADO CONDICIONAL =====
   if (geoError) {
     return <ErrorDisplay title="ERROR DE UBICACIÓN" message={geoError} onRetry={() => window.location.reload()} />;
   }
 
-  // Error de datos de Supabase
   if (dataError) {
-    return <ErrorDisplay title="ERROR DE CONEXIÓN" message={`No se pudieron cargar los datos: ${dataError}. Verifica tu conexión a internet y las credenciales de Supabase.`} onRetry={() => window.location.reload()} />;
+    return <ErrorDisplay title="ERROR DE CONEXIÓN" message={`No se pudieron cargar los datos: ${dataError}`} onRetry={() => window.location.reload()} />;
   }
 
-  // Cargando (geolocalización O datos)
   if (geoLoading || !dataLoaded) {
     return (
       <div className="h-screen w-full flex items-center justify-center bg-gray-900">
@@ -437,9 +483,6 @@ const MapComponent = () => {
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyan-500"></div>
           <p className="text-cyan-400 font-mono text-sm tracking-widest">
             {geoLoading ? 'OBTENIENDO UBICACIÓN...' : 'CARGANDO DATOS...'}
-          </p>
-          <p className="text-cyan-600/50 font-mono text-xs">
-            {geoLoading ? 'Esperando permiso de GPS...' : 'Conectando a Supabase...'}
           </p>
         </div>
       </div>
@@ -451,6 +494,15 @@ const MapComponent = () => {
   return (
     <div className="relative h-screen w-full bg-gray-900">
       
+      {/* ===== TOOLTIP FLOTANTE DEL MARCADOR ===== */}
+      {selectedMarker && (
+        <MarkerTooltip 
+          marker={selectedMarker} 
+          onClose={closeMarkerTooltip}
+          onDelete={deleteMarker}
+        />
+      )}
+
       {/* Header */}
       <div className="absolute top-4 left-4 right-4 z-[1000] glass-panel rounded-2xl p-4 shadow-glass bg-gray-900/80 border-cyan-500/20">
         <div className="flex items-center justify-between flex-wrap gap-4">
@@ -539,15 +591,17 @@ const MapComponent = () => {
           ) : (
             <div className="space-y-3">
               {markers.map((m) => (
-                <div key={m.id} className="bg-cyan-950/20 border border-cyan-500/10 rounded-xl p-3 flex items-center justify-between group hover:border-cyan-500/30 transition-all">
+                <div key={m.id} className="bg-cyan-950/20 border border-cyan-500/10 rounded-xl p-3 flex items-center justify-between group hover:border-cyan-500/30 transition-all cursor-pointer"
+                  onClick={() => handleMarkerClick(m)}>
                   <div className="flex items-center gap-3">
                     <div className="w-3 h-3 rounded-full" style={{ backgroundColor: m.color, boxShadow: `0 0 8px ${m.color}` }} />
                     <div>
                       <p className="text-sm font-medium text-cyan-200 font-mono">{m.name}</p>
-                      <p className="text-[10px] text-cyan-600 font-mono">MARCADOR</p>
+                      <p className="text-[10px] text-cyan-600 font-mono">MARCADOR • CLIC PARA VER</p>
                     </div>
                   </div>
-                  <button onClick={() => deleteMarker(m.id)} className="p-1.5 text-red-400 hover:bg-red-500/10 rounded-lg opacity-0 group-hover:opacity-100 transition-all">
+                  <button onClick={(e) => { e.stopPropagation(); deleteMarker(m.id); }} 
+                    className="p-1.5 text-red-400 hover:bg-red-500/10 rounded-lg opacity-0 group-hover:opacity-100 transition-all">
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 </div>
@@ -618,9 +672,9 @@ const MapComponent = () => {
             }} />
         ))}
 
-        {/* Marcadores */}
+        {/* Marcadores - AHORA CON EVENTO DE CLIC PROPIO */}
         {markers.map((marker) => (
-          <CustomMarker key={marker.id} marker={marker} />
+          <CustomMarker key={marker.id} marker={marker} onClick={handleMarkerClick} />
         ))}
 
         {/* Ubicación actual */}
