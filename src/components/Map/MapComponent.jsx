@@ -5,7 +5,7 @@ import { supabase } from '../../utils/supabaseClient';
 import { 
   MousePointer2, Trash2, Check, X, 
   Navigation, Square, Download, Globe, MapPin, 
-  Plus, Sparkles, Crosshair, AlertTriangle, XCircle
+  Plus, Sparkles, Crosshair, AlertTriangle
 } from 'lucide-react';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
@@ -29,7 +29,7 @@ const MARKER_COLORS = [
   '#06b6d4', '#8b5cf6', '#ec4899', '#10b981', '#f59e0b', '#ef4444'
 ];
 
-// ===== COMPONENTE DE ERROR =====
+// ===== ERROR DISPLAY =====
 const ErrorDisplay = ({ title, message, onRetry }) => (
   <div className="h-screen w-full flex items-center justify-center bg-gray-900 p-4">
     <div className="hologram-card relative max-w-md w-full rounded-2xl p-8 text-center">
@@ -44,7 +44,7 @@ const ErrorDisplay = ({ title, message, onRetry }) => (
   </div>
 );
 
-// ===== FUNCIÓN PARA ESCAPAR HTML Y FORMATEAR COORDENADAS =====
+// ===== ESCAPE HTML =====
 function escapeHtml(str) {
   if (!str) return '';
   return str.replace(/[&<>]/g, function(m) {
@@ -55,24 +55,15 @@ function escapeHtml(str) {
   });
 }
 
-function formatCoordinate(value) {
-  const num = typeof value === 'number' ? value : parseFloat(value);
-  return isNaN(num) ? '0.00000' : num.toFixed(5);
-}
-
-// ===== MARCADOR CUSTOM CON POPUP (CORREGIDO) =====
+// ===== CUSTOM MARKER CON VALIDACIÓN =====
 const CustomMarker = ({ marker, onDelete }) => {
   const map = useMap();
   
   useEffect(() => {
+    // Validación de coordenadas
     if (!map) return;
-    
-    // Asegurar que lat/lng sean números
-    const lat = typeof marker.lat === 'number' ? marker.lat : parseFloat(marker.lat);
-    const lng = typeof marker.lng === 'number' ? marker.lng : parseFloat(marker.lng);
-    
-    if (isNaN(lat) || isNaN(lng)) {
-      console.error('Coordenadas inválidas para marcador:', marker);
+    if (typeof marker.lat !== 'number' || typeof marker.lng !== 'number' || isNaN(marker.lat) || isNaN(marker.lng)) {
+      console.warn('Marcador inválido (coordenadas no numéricas):', marker);
       return;
     }
     
@@ -89,11 +80,7 @@ const CustomMarker = ({ marker, onDelete }) => {
         iconAnchor: [16, 16],
       });
 
-      const leafletMarker = L.marker([lat, lng], { icon: customIcon }).addTo(map);
-      
-      // Usar la función formatCoordinate para evitar errores
-      const formattedLat = formatCoordinate(lat);
-      const formattedLng = formatCoordinate(lng);
+      const leafletMarker = L.marker([marker.lat, marker.lng], { icon: customIcon }).addTo(map);
       
       const popupContent = `
         <div class="hologram-card p-4 min-w-[240px] max-w-sm relative" style="animation: none; box-shadow: 0 0 20px rgba(6,182,212,0.3);">
@@ -114,8 +101,8 @@ const CustomMarker = ({ marker, onDelete }) => {
           </div>
           
           <div class="grid grid-cols-2 gap-1 mb-2 text-[9px]">
-            <div><span class="text-cyan-500/50">LAT:</span> ${formattedLat}</div>
-            <div><span class="text-cyan-500/50">LNG:</span> ${formattedLng}</div>
+            <div><span class="text-cyan-500/50">LAT:</span> ${marker.lat.toFixed(5)}</div>
+            <div><span class="text-cyan-500/50">LNG:</span> ${marker.lng.toFixed(5)}</div>
           </div>
           
           <div class="flex justify-end">
@@ -156,7 +143,7 @@ const CustomMarker = ({ marker, onDelete }) => {
   return null;
 };
 
-// ===== HANDLER DE DIBUJO =====
+// ===== DRAWING HANDLER (sin cambios) =====
 const DrawingHandler = ({ mode, onPointAdd, points, onFinish, onCancel, onMapClick }) => {
   const map = useMap();
   
@@ -187,11 +174,10 @@ const DrawingHandler = ({ mode, onPointAdd, points, onFinish, onCancel, onMapCli
   return null;
 };
 
-// ===== PREVIEW DE DIBUJO =====
+// ===== DRAWING PREVIEW (sin cambios) =====
 const DrawingPreview = ({ points, color, map }) => {
   useEffect(() => {
     if (!map || points.length < 2) return;
-    
     try {
       const polyline = L.polyline(points, { color, weight: 3, opacity: 0.7, dashArray: '5, 10' }).addTo(map);
       const markers = points.map((point, i) => 
@@ -208,11 +194,10 @@ const DrawingPreview = ({ points, color, map }) => {
       console.error('Error en DrawingPreview:', err);
     }
   }, [points, color, map]);
-  
   return null;
 };
 
-// ===== FORMULARIO MARCADOR =====
+// ===== MARKER FORM MODAL =====
 const MarkerFormModal = ({ position, onSave, onCancel }) => {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -221,7 +206,13 @@ const MarkerFormModal = ({ position, onSave, onCancel }) => {
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!name.trim()) return;
-    onSave({ name: name.trim(), description: description.trim(), color, lat: position.lat, lng: position.lng });
+    onSave({ 
+      name: name.trim(), 
+      description: description.trim(), 
+      color, 
+      lat: Number(position.lat), 
+      lng: Number(position.lng) 
+    });
   };
 
   return (
@@ -292,20 +283,25 @@ const MapComponent = () => {
   // ===== CARGAR DATOS =====
   useEffect(() => {
     let cancelled = false;
-    
     const loadData = async () => {
       try {
         const [{ data: areasData, error: areasError }, { data: markersData, error: markersError }] = await Promise.all([
           supabase.from('areas').select('*').order('created_at', { ascending: false }),
           supabase.from('markers').select('*').order('created_at', { ascending: false }),
         ]);
-        
         if (cancelled) return;
         if (areasError) throw new Error(`Áreas: ${areasError.message}`);
         if (markersError) throw new Error(`Marcadores: ${markersError.message}`);
         
+        // Asegurar que lat/lng sean números
+        const sanitizedMarkers = (markersData || []).map(m => ({
+          ...m,
+          lat: Number(m.lat),
+          lng: Number(m.lng),
+        }));
+        
         setAreas(areasData || []);
-        setMarkers(markersData || []);
+        setMarkers(sanitizedMarkers);
         setDataLoaded(true);
       } catch (err) {
         if (!cancelled) {
@@ -315,7 +311,6 @@ const MapComponent = () => {
         }
       }
     };
-    
     loadData();
     return () => { cancelled = true; };
   }, []);
@@ -323,7 +318,6 @@ const MapComponent = () => {
   // ===== SUSCRIPCIONES =====
   useEffect(() => {
     if (!dataLoaded) return;
-    
     const areasSub = supabase.channel('areas-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'areas' }, (payload) => {
         if (payload.eventType === 'INSERT') {
@@ -332,16 +326,15 @@ const MapComponent = () => {
           setAreas(prev => prev.filter(a => a.id !== payload.old.id));
         }
       }).subscribe();
-
     const markersSub = supabase.channel('markers-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'markers' }, (payload) => {
         if (payload.eventType === 'INSERT') {
-          setMarkers(prev => prev.find(m => m.id === payload.new.id) ? prev : [payload.new, ...prev]);
+          const newMarker = { ...payload.new, lat: Number(payload.new.lat), lng: Number(payload.new.lng) };
+          setMarkers(prev => prev.find(m => m.id === newMarker.id) ? prev : [newMarker, ...prev]);
         } else if (payload.eventType === 'DELETE') {
           setMarkers(prev => prev.filter(m => m.id !== payload.old.id));
         }
       }).subscribe();
-
     return () => {
       supabase.removeChannel(areasSub);
       supabase.removeChannel(markersSub);
@@ -350,10 +343,8 @@ const MapComponent = () => {
 
   // ===== LÓGICA ÁREAS =====
   const addDrawingPoint = useCallback((point) => setDrawingPoints(prev => [...prev, point]), []);
-  
   const finishDrawing = useCallback(async () => {
     if (drawingPoints.length < 3) { alert('Mínimo 3 puntos'); return; }
-    
     const newArea = {
       name: `Área ${areas.length + 1}`,
       coordinates: [...drawingPoints],
@@ -361,12 +352,10 @@ const MapComponent = () => {
       fill_opacity: selectedColor.fillOpacity,
       stroke_opacity: selectedColor.strokeOpacity,
     };
-    
     const tempId = 'temp-' + Date.now();
     setAreas(prev => [{ ...newArea, id: tempId, created_at: new Date().toISOString() }, ...prev]);
     setDrawingPoints([]);
     setMode(null);
-    
     const { data, error } = await supabase.from('areas').insert([newArea]).select();
     if (error) {
       alert('Error: ' + error.message);
@@ -375,14 +364,12 @@ const MapComponent = () => {
       setAreas(prev => prev.map(a => a.id === tempId ? data[0] : a));
     }
   }, [drawingPoints, selectedColor, areas.length]);
-
   const cancelMode = useCallback(() => {
     setMode(null);
     setDrawingPoints([]);
     setShowMarkerForm(false);
     setPendingMarkerPos(null);
   }, []);
-
   const deleteArea = async (id) => {
     if (!confirm('¿Eliminar esta área?')) return;
     setAreas(prev => prev.filter(a => a.id !== id));
@@ -399,25 +386,23 @@ const MapComponent = () => {
     setPendingMarkerPos(latLng);
     setShowMarkerForm(true);
   };
-
   const saveMarker = async (data) => {
+    const numericData = { ...data, lat: Number(data.lat), lng: Number(data.lng) };
     const tempId = 'temp-' + Date.now();
-    const tempMarker = { ...data, id: tempId, created_at: new Date().toISOString() };
-    
+    const tempMarker = { ...numericData, id: tempId, created_at: new Date().toISOString() };
     setMarkers(prev => [tempMarker, ...prev]);
     setShowMarkerForm(false);
     setPendingMarkerPos(null);
     setMode(null);
-    
-    const { data: result, error } = await supabase.from('markers').insert([data]).select();
+    const { data: result, error } = await supabase.from('markers').insert([numericData]).select();
     if (error) {
       alert('Error: ' + error.message);
       setMarkers(prev => prev.filter(m => m.id !== tempId));
     } else if (result) {
-      setMarkers(prev => prev.map(m => m.id === tempId ? result[0] : m));
+      const savedMarker = { ...result[0], lat: Number(result[0].lat), lng: Number(result[0].lng) };
+      setMarkers(prev => prev.map(m => m.id === tempId ? savedMarker : m));
     }
   };
-
   const deleteMarker = async (id) => {
     if (!confirm('¿Eliminar este marcador?')) return;
     setMarkers(prev => prev.filter(m => m.id !== id));
@@ -428,7 +413,6 @@ const MapComponent = () => {
       setMarkers(data || []);
     }
   };
-
   const loadPredefinedArea = async () => {
     const predefined = {
       name: 'Plaza Mayor Madrid',
@@ -442,7 +426,6 @@ const MapComponent = () => {
       mapInstance.fitBounds(L.latLngBounds(predefined.coordinates), { padding: [50, 50] });
     }
   };
-
   const exportData = () => {
     const blob = new Blob([JSON.stringify({ areas, markers }, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -451,20 +434,13 @@ const MapComponent = () => {
     link.download = `mapa-respaldo-${new Date().toISOString().split('T')[0]}.json`;
     link.click();
   };
-
   const centerOnCurrentLocation = () => {
     if (mapInstance && position) mapInstance.flyTo([position.lat, position.lng], 18);
   };
 
   // ===== RENDERIZADO CONDICIONAL =====
-  if (geoError) {
-    return <ErrorDisplay title="ERROR DE UBICACIÓN" message={geoError} onRetry={() => window.location.reload()} />;
-  }
-
-  if (dataError) {
-    return <ErrorDisplay title="ERROR DE CONEXIÓN" message={`No se pudieron cargar los datos: ${dataError}`} onRetry={() => window.location.reload()} />;
-  }
-
+  if (geoError) return <ErrorDisplay title="ERROR DE UBICACIÓN" message={geoError} onRetry={() => window.location.reload()} />;
+  if (dataError) return <ErrorDisplay title="ERROR DE CONEXIÓN" message={`No se pudieron cargar los datos: ${dataError}`} onRetry={() => window.location.reload()} />;
   if (geoLoading || !dataLoaded) {
     return (
       <div className="h-screen w-full flex items-center justify-center bg-gray-900">
@@ -478,12 +454,11 @@ const MapComponent = () => {
     );
   }
 
-  const defaultPosition = position || { lat: 40.4168, lng: -3.7038 };
+  const defaultPosition = position && position.lat && position.lng ? position : { lat: 40.4168, lng: -3.7038 };
 
   return (
     <div className="relative h-screen w-full bg-gray-900">
-      
-      {/* Header */}
+      {/* Header (igual que antes) */}
       <div className="absolute top-4 left-4 right-4 z-[1000] glass-panel rounded-2xl p-4 shadow-glass bg-gray-900/80 border-cyan-500/20">
         <div className="flex items-center justify-between flex-wrap gap-4">
           <div className="flex items-center gap-3">
@@ -497,7 +472,6 @@ const MapComponent = () => {
               </p>
             </div>
           </div>
-
           <div className="flex items-center gap-2 bg-cyan-950/30 rounded-xl p-2 border border-cyan-500/20">
             <span className="text-[10px] text-cyan-500 uppercase tracking-widest px-2 font-mono">COLOR:</span>
             {COLOR_PALETTE.map((color) => (
@@ -509,16 +483,14 @@ const MapComponent = () => {
         </div>
       </div>
 
-      {/* Controles */}
+      {/* Controles laterales (igual) */}
       <div className="absolute top-28 left-4 z-[1000] flex flex-col gap-3">
         <div className="glass-panel rounded-2xl p-3 shadow-glass bg-gray-900/80 border-cyan-500/20 flex flex-col gap-2">
-          
           <button onClick={() => setMode(mode === 'area' ? null : 'area')}
             className={`p-3 rounded-xl transition-all flex items-center gap-2 border ${mode === 'area' ? 'bg-blue-600/80 border-blue-400 text-white' : 'bg-cyan-950/30 border-cyan-500/20 text-cyan-300 hover:bg-cyan-900/30'}`}>
             {mode === 'area' ? <X className="w-5 h-5" /> : <MousePointer2 className="w-5 h-5" />}
             <span className="text-sm font-medium hidden lg:inline font-mono">{mode === 'area' ? 'CANCELAR' : 'ÁREA'}</span>
           </button>
-
           {mode === 'area' && drawingPoints.length >= 3 && (
             <button onClick={finishDrawing}
               className="p-3 rounded-xl bg-green-600/80 border border-green-400 text-white hover:bg-green-500/80 transition-all flex items-center gap-2 animate-pulse">
@@ -526,32 +498,27 @@ const MapComponent = () => {
               <span className="text-sm font-medium hidden lg:inline font-mono">PUBLICAR</span>
             </button>
           )}
-
           <button onClick={() => setMode(mode === 'marker' ? null : 'marker')}
             className={`p-3 rounded-xl transition-all flex items-center gap-2 border ${mode === 'marker' ? 'bg-purple-600/80 border-purple-400 text-white' : 'bg-cyan-950/30 border-cyan-500/20 text-cyan-300 hover:bg-cyan-900/30'}`}>
             {mode === 'marker' ? <X className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
             <span className="text-sm font-medium hidden lg:inline font-mono">{mode === 'marker' ? 'CANCELAR' : 'MARCADOR'}</span>
           </button>
-
           <button onClick={loadPredefinedArea}
             className="p-3 rounded-xl bg-cyan-950/30 border border-cyan-500/20 text-cyan-300 hover:bg-cyan-900/30 transition-all flex items-center gap-2">
             <Square className="w-5 h-5" />
             <span className="text-sm font-medium hidden lg:inline font-mono">DEMO</span>
           </button>
-
           <button onClick={centerOnCurrentLocation}
             className="p-3 rounded-xl bg-cyan-950/30 border border-cyan-500/20 text-cyan-300 hover:bg-cyan-900/30 transition-all flex items-center gap-2">
             <Navigation className="w-5 h-5" />
             <span className="text-sm font-medium hidden lg:inline font-mono">UBICACIÓN</span>
           </button>
-
           <button onClick={() => setShowDataList(!showDataList)}
             className={`p-3 rounded-xl transition-all flex items-center gap-2 border ${showDataList ? 'bg-cyan-500/20 border-cyan-400 text-cyan-200' : 'bg-cyan-950/30 border-cyan-500/20 text-cyan-300 hover:bg-cyan-900/30'}`}>
             <Crosshair className="w-5 h-5" />
             <span className="text-sm font-medium hidden lg:inline font-mono">DATOS</span>
           </button>
         </div>
-
         <div className="glass-panel rounded-2xl p-3 shadow-glass bg-gray-900/80 border-cyan-500/20 flex flex-col gap-2">
           <button onClick={exportData} className="p-3 rounded-xl bg-cyan-950/30 border border-cyan-500/20 text-cyan-300 hover:bg-cyan-900/30 transition-all flex items-center gap-2">
             <Download className="w-5 h-5" />
@@ -579,8 +546,7 @@ const MapComponent = () => {
                       <p className="text-[10px] text-cyan-600 font-mono">MARCADOR</p>
                     </div>
                   </div>
-                  <button onClick={() => deleteMarker(m.id)} 
-                    className="p-1.5 text-red-400 hover:bg-red-500/10 rounded-lg opacity-0 group-hover:opacity-100 transition-all">
+                  <button onClick={() => deleteMarker(m.id)} className="p-1.5 text-red-400 hover:bg-red-500/10 rounded-lg opacity-0 group-hover:opacity-100 transition-all">
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 </div>
@@ -613,7 +579,6 @@ const MapComponent = () => {
           </span>
         </div>
       )}
-      
       {mode === 'marker' && (
         <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 z-[1000] bg-gray-900/90 border border-purple-500/30 text-purple-200 px-6 py-3 rounded-xl shadow-2xl flex items-center gap-3 backdrop-blur-md">
           <MapPin className="w-5 h-5 text-purple-400 animate-bounce" />
@@ -628,26 +593,14 @@ const MapComponent = () => {
       )}
 
       {/* MAPA */}
-      <MapContainer 
-        center={[defaultPosition.lat, defaultPosition.lng]} 
-        zoom={16}
-        scrollWheelZoom={true} 
-        className="h-full w-full" 
-        whenCreated={setMapInstance}
-      >
-        <TileLayer 
-          attribution='&copy; OpenStreetMap contributors'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" 
-        />
-
+      <MapContainer center={[defaultPosition.lat, defaultPosition.lng]} zoom={16}
+        scrollWheelZoom={true} className="h-full w-full" whenCreated={setMapInstance}>
+        <TileLayer attribution='&copy; OpenStreetMap contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
         <DrawingHandler mode={mode} onPointAdd={addDrawingPoint} points={drawingPoints}
           onFinish={finishDrawing} onCancel={cancelMode} onMapClick={handleMapClickForMarker} />
-
         {mode === 'area' && mapInstance && (
           <DrawingPreview points={drawingPoints} color={selectedColor.hex} map={mapInstance} />
         )}
-
-        {/* Áreas */}
         {areas.map((area) => (
           <Polygon key={area.id} positions={area.coordinates}
             pathOptions={{
@@ -656,14 +609,13 @@ const MapComponent = () => {
               opacity: area.stroke_opacity || 0.9, lineCap: 'round', lineJoin: 'round',
             }} />
         ))}
-
-        {/* Marcadores con popup anclado */}
-        {markers.map((marker) => (
-          <CustomMarker key={marker.id} marker={marker} onDelete={deleteMarker} />
-        ))}
-
-        {/* Ubicación actual */}
-        {position && (
+        {/* Marcadores filtrados y validados */}
+        {markers
+          .filter(m => typeof m.lat === 'number' && typeof m.lng === 'number' && !isNaN(m.lat) && !isNaN(m.lng))
+          .map((marker) => (
+            <CustomMarker key={marker.id} marker={marker} onDelete={deleteMarker} />
+          ))}
+        {position && position.lat && position.lng && (
           <CircleMarker center={[position.lat, position.lng]} radius={8}
             pathOptions={{ color: '#3b82f6', fillColor: '#3b82f6', fillOpacity: 0.8, weight: 2 }} />
         )}
