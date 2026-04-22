@@ -10,7 +10,7 @@ import {
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 
-// Fix íconos Leaflet
+// Fix Leaflet icons
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
@@ -44,103 +44,19 @@ const ErrorDisplay = ({ title, message, onRetry }) => (
   </div>
 );
 
-// ===== TOOLTIP/MODAL FLOTANTE PARA MARCADORES =====
-const MarkerTooltip = ({ marker, onClose, onDelete }) => {
-  if (!marker) return null;
+// ===== FUNCIÓN PARA ESCAPAR HTML =====
+function escapeHtml(str) {
+  if (!str) return '';
+  return str.replace(/[&<>]/g, function(m) {
+    if (m === '&') return '&amp;';
+    if (m === '<') return '&lt;';
+    if (m === '>') return '&gt;';
+    return m;
+  });
+}
 
-  return (
-    <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4" onClick={onClose}>
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-      
-      <div 
-        className="hologram-card relative w-full max-w-sm rounded-2xl p-6 text-cyan-50 animate-in fade-in zoom-in duration-200"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Esquinas decorativas */}
-        <div className="absolute top-0 left-0 w-5 h-5 border-t-2 border-l-2 border-cyan-400 rounded-tl-xl" />
-        <div className="absolute top-0 right-0 w-5 h-5 border-t-2 border-r-2 border-cyan-400 rounded-tr-xl" />
-        <div className="absolute bottom-0 left-0 w-5 h-5 border-b-2 border-l-2 border-cyan-400 rounded-bl-xl" />
-        <div className="absolute bottom-0 right-0 w-5 h-5 border-b-2 border-r-2 border-cyan-400 rounded-br-xl" />
-
-        {/* Botón cerrar */}
-        <button 
-          onClick={onClose}
-          className="absolute top-3 right-3 text-cyan-500 hover:text-cyan-200 transition-colors z-10"
-        >
-          <XCircle className="w-5 h-5" />
-        </button>
-
-        {/* Header */}
-        <div className="flex items-center gap-3 mb-4 pr-6">
-          <div 
-            className="w-4 h-4 rounded-full animate-pulse flex-shrink-0"
-            style={{ 
-              backgroundColor: marker.color, 
-              boxShadow: `0 0 12px ${marker.color}, 0 0 24px ${marker.color}40` 
-            }}
-          />
-          <h3 className="text-lg font-bold text-cyan-50 font-mono tracking-wider uppercase leading-tight">
-            {marker.name}
-          </h3>
-        </div>
-
-        {/* Línea divisoria */}
-        <div className="h-px w-full bg-gradient-to-r from-transparent via-cyan-500/50 to-transparent mb-4" />
-
-        {/* Descripción */}
-        <div className="relative mb-4 group/description">
-          <div className="flex items-center gap-2 text-cyan-400/60 text-[10px] font-mono mb-2 uppercase tracking-widest">
-            <Sparkles className="w-3 h-3" />
-            <span>Descripción del lugar</span>
-          </div>
-          <div className="bg-cyan-950/20 border border-cyan-500/10 rounded-xl p-3">
-            <p className="text-sm text-cyan-100/90 leading-relaxed font-mono">
-              {marker.description || 'Sin descripción disponible.'}
-            </p>
-          </div>
-          {/* Efecto hover scanline */}
-          <div className="absolute inset-0 rounded-xl pointer-events-none opacity-0 group-hover/description:opacity-100 transition-opacity duration-500">
-            <div className="absolute inset-0 bg-gradient-to-b from-transparent via-cyan-400/5 to-transparent animate-scan" />
-          </div>
-        </div>
-
-        {/* Coordenadas */}
-        <div className="grid grid-cols-2 gap-2 mb-3">
-          <div className="bg-cyan-950/30 border border-cyan-500/15 rounded-lg p-2">
-            <span className="text-[9px] text-cyan-500/50 font-mono block mb-1">LATITUD</span>
-            <span className="text-xs text-cyan-300 font-mono">{marker.lat?.toFixed(6)}</span>
-          </div>
-          <div className="bg-cyan-950/30 border border-cyan-500/15 rounded-lg p-2">
-            <span className="text-[9px] text-cyan-500/50 font-mono block mb-1">LONGITUD</span>
-            <span className="text-xs text-cyan-300 font-mono">{marker.lng?.toFixed(6)}</span>
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="flex items-center justify-between pt-2 border-t border-cyan-500/10">
-          <span className="text-[9px] text-cyan-600/50 font-mono">
-            ID: {marker.id?.slice(0, 8)}... • {new Date(marker.created_at).toLocaleDateString()}
-          </span>
-          <button
-            onClick={() => {
-              if (confirm('¿Eliminar este marcador permanentemente?')) {
-                onDelete(marker.id);
-                onClose();
-              }
-            }}
-            className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 transition-all text-[10px] font-mono"
-          >
-            <Trash2 className="w-3 h-3" />
-            ELIMINAR
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// ===== MARCADOR CUSTOM CON EVENTO DE CLIC =====
-const CustomMarker = ({ marker, onClick }) => {
+// ===== MARCADOR CUSTOM CON POPUP HOLOGRÁFICO =====
+const CustomMarker = ({ marker, onDelete }) => {
   const map = useMap();
   
   useEffect(() => {
@@ -158,15 +74,63 @@ const CustomMarker = ({ marker, onClick }) => {
 
     const leafletMarker = L.marker([marker.lat, marker.lng], { icon: customIcon }).addTo(map);
     
-    leafletMarker.on('click', () => {
-      onClick(marker);
+    // Contenido HTML del popup (diseño holográfico)
+    const popupContent = `
+      <div class="hologram-card p-4 min-w-[240px] max-w-sm relative" style="animation: none; box-shadow: 0 0 20px rgba(6,182,212,0.3);">
+        <div class="absolute top-0 left-0 w-3 h-3 border-t-2 border-l-2 border-cyan-400 rounded-tl-md"></div>
+        <div class="absolute top-0 right-0 w-3 h-3 border-t-2 border-r-2 border-cyan-400 rounded-tr-md"></div>
+        <div class="absolute bottom-0 left-0 w-3 h-3 border-b-2 border-l-2 border-cyan-400 rounded-bl-md"></div>
+        <div class="absolute bottom-0 right-0 w-3 h-3 border-b-2 border-r-2 border-cyan-400 rounded-br-md"></div>
+        
+        <div class="flex items-center gap-2 mb-3">
+          <div class="w-3 h-3 rounded-full" style="background: ${marker.color}; box-shadow: 0 0 8px ${marker.color};"></div>
+          <h3 class="text-sm font-bold text-cyan-50 font-mono tracking-wider">${escapeHtml(marker.name)}</h3>
+        </div>
+        
+        <div class="h-px w-full bg-gradient-to-r from-transparent via-cyan-500/50 to-transparent mb-3"></div>
+        
+        <div class="text-xs text-cyan-100/80 font-mono leading-relaxed mb-3">
+          ${escapeHtml(marker.description) || '<span class="text-cyan-500/50">Sin descripción</span>'}
+        </div>
+        
+        <div class="grid grid-cols-2 gap-1 mb-2 text-[9px]">
+          <div><span class="text-cyan-500/50">LAT:</span> ${marker.lat.toFixed(5)}</div>
+          <div><span class="text-cyan-500/50">LNG:</span> ${marker.lng.toFixed(5)}</div>
+        </div>
+        
+        <div class="flex justify-end">
+          <button id="delete-marker-${marker.id}" class="delete-marker-btn text-red-400 hover:text-red-300 text-[10px] font-mono transition flex items-center gap-1 bg-red-500/10 px-2 py-1 rounded">
+            🗑️ ELIMINAR
+          </button>
+        </div>
+      </div>
+    `;
+    
+    leafletMarker.bindPopup(popupContent, {
+      className: 'custom-hologram-popup',
+      closeButton: true,
+      closeOnClick: false,
+      autoPan: true,
+      offset: [0, -20]
     });
-
+    
+    // Manejar evento de eliminación desde el popup
+    leafletMarker.on('popupopen', () => {
+      const deleteBtn = document.getElementById(`delete-marker-${marker.id}`);
+      if (deleteBtn) {
+        deleteBtn.onclick = (e) => {
+          e.stopPropagation();
+          onDelete(marker.id);
+          leafletMarker.closePopup();
+        };
+      }
+    });
+    
     return () => {
       map.removeLayer(leafletMarker);
     };
-  }, [marker, map, onClick]);
-
+  }, [marker, map, onDelete]);
+  
   return null;
 };
 
@@ -284,7 +248,6 @@ const MapComponent = () => {
   const [drawingPoints, setDrawingPoints] = useState([]);
   
   const [markers, setMarkers] = useState([]);
-  const [selectedMarker, setSelectedMarker] = useState(null); // Marcador seleccionado para mostrar tooltip
   const [showMarkerForm, setShowMarkerForm] = useState(false);
   const [pendingMarkerPos, setPendingMarkerPos] = useState(null);
   
@@ -402,15 +365,6 @@ const MapComponent = () => {
     setShowMarkerForm(true);
   };
 
-  // Al hacer clic en un marcador existente
-  const handleMarkerClick = useCallback((marker) => {
-    setSelectedMarker(marker);
-  }, []);
-
-  const closeMarkerTooltip = useCallback(() => {
-    setSelectedMarker(null);
-  }, []);
-
   const saveMarker = async (data) => {
     const tempId = 'temp-' + Date.now();
     const tempMarker = { ...data, id: tempId, created_at: new Date().toISOString() };
@@ -494,15 +448,6 @@ const MapComponent = () => {
   return (
     <div className="relative h-screen w-full bg-gray-900">
       
-      {/* ===== TOOLTIP FLOTANTE DEL MARCADOR ===== */}
-      {selectedMarker && (
-        <MarkerTooltip 
-          marker={selectedMarker} 
-          onClose={closeMarkerTooltip}
-          onDelete={deleteMarker}
-        />
-      )}
-
       {/* Header */}
       <div className="absolute top-4 left-4 right-4 z-[1000] glass-panel rounded-2xl p-4 shadow-glass bg-gray-900/80 border-cyan-500/20">
         <div className="flex items-center justify-between flex-wrap gap-4">
@@ -591,16 +536,15 @@ const MapComponent = () => {
           ) : (
             <div className="space-y-3">
               {markers.map((m) => (
-                <div key={m.id} className="bg-cyan-950/20 border border-cyan-500/10 rounded-xl p-3 flex items-center justify-between group hover:border-cyan-500/30 transition-all cursor-pointer"
-                  onClick={() => handleMarkerClick(m)}>
+                <div key={m.id} className="bg-cyan-950/20 border border-cyan-500/10 rounded-xl p-3 flex items-center justify-between group hover:border-cyan-500/30 transition-all">
                   <div className="flex items-center gap-3">
                     <div className="w-3 h-3 rounded-full" style={{ backgroundColor: m.color, boxShadow: `0 0 8px ${m.color}` }} />
                     <div>
                       <p className="text-sm font-medium text-cyan-200 font-mono">{m.name}</p>
-                      <p className="text-[10px] text-cyan-600 font-mono">MARCADOR • CLIC PARA VER</p>
+                      <p className="text-[10px] text-cyan-600 font-mono">MARCADOR</p>
                     </div>
                   </div>
-                  <button onClick={(e) => { e.stopPropagation(); deleteMarker(m.id); }} 
+                  <button onClick={() => deleteMarker(m.id)} 
                     className="p-1.5 text-red-400 hover:bg-red-500/10 rounded-lg opacity-0 group-hover:opacity-100 transition-all">
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
@@ -672,9 +616,9 @@ const MapComponent = () => {
             }} />
         ))}
 
-        {/* Marcadores - AHORA CON EVENTO DE CLIC PROPIO */}
+        {/* Marcadores con popup anclado */}
         {markers.map((marker) => (
-          <CustomMarker key={marker.id} marker={marker} onClick={handleMarkerClick} />
+          <CustomMarker key={marker.id} marker={marker} onDelete={deleteMarker} />
         ))}
 
         {/* Ubicación actual */}
