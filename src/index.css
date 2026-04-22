@@ -92,7 +92,7 @@
   100% { transform: translateY(100%); }
 }
 
-/* ===== MARCADORES PERSONALIZADOS (CORREGIDOS) ===== */
+/* ===== MARCADORES PERSONALIZADOS ===== */
 .custom-marker {
   background: transparent !important;
   border: none !important;
@@ -135,6 +135,45 @@
   animation: marker-pulse-ring 2s ease-out infinite;
 }
 
+/* ===== POPUP HOLOGRÁFICO ANCLADO AL MARCADOR ===== */
+.custom-hologram-popup .leaflet-popup-content-wrapper {
+  background: transparent !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
+}
+
+.custom-hologram-popup .leaflet-popup-content {
+  margin: 0 !important;
+  width: auto !important;
+}
+
+.custom-hologram-popup .leaflet-popup-tip {
+  background: rgba(6, 182, 212, 0.4) !important;
+  border: 1px solid rgba(6, 182, 212, 0.6) !important;
+  backdrop-filter: blur(8px);
+}
+
+.custom-hologram-popup .leaflet-popup-close-button {
+  color: #22d3ee !important;
+  font-size: 18px !important;
+  top: 8px !important;
+  right: 8px !important;
+  background: rgba(0,0,0,0.4);
+  border-radius: 20px;
+  width: 22px;
+  height: 22px;
+  line-height: 18px;
+  text-align: center;
+  transition: 0.2s;
+  z-index: 10;
+}
+
+.custom-hologram-popup .leaflet-popup-close-button:hover {
+  background: rgba(6,182,212,0.4);
+  color: white;
+}
+
 /* ===== CLASES DE ANIMACIÓN FALTANTES ===== */
 .animate-in {
   animation: fade-in-up 0.3s ease-out forwards;
@@ -168,28 +207,7 @@
   border-radius: 2px;
 }
 
-/* ===== OPCIONAL: POPUP HOLOGRÁFICO (NO USADO POR EL COMPONENTE, PERO SE MANTIENE) ===== */
-.holographic-popup .leaflet-popup-content-wrapper {
-  background: rgba(6, 182, 212, 0.08) !important;
-  backdrop-filter: blur(16px) !important;
-  border: 1px solid rgba(6, 182, 212, 0.4) !important;
-  border-radius: 16px !important;
-  box-shadow: 0 0 30px rgba(6, 182, 212, 0.15), 0 8px 32px rgba(0, 0, 0, 0.4), inset 0 0 30px rgba(6, 182, 212, 0.05) !important;
-  padding: 0 !important;
-  overflow: hidden;
-}
-.holographic-popup .leaflet-popup-content {
-  margin: 0 !important;
-  padding: 16px !important;
-  color: #ecfeff;
-  font-family: ui-monospace, monospace;
-  line-height: 1.5;
-}
-.holographic-popup .leaflet-popup-tip {
-  background: rgba(6, 182, 212, 0.15) !important;
-  border: 1px solid rgba(6, 182, 212, 0.3) !important;
-  backdrop-filter: blur(16px) !important;
-}
-.holographic-popup .leaflet-popup-close-button {
-  display: none !important;
+/* ===== BOTÓN ELIMINAR DENTRO DEL POPUP ===== */
+.delete-marker-btn {
+  cursor: pointer;
 }
