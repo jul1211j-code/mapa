@@ -2,27 +2,60 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Leaflet base */
+/* ===== BASE Y LEAFLET ===== */
 .leaflet-container {
   width: 100%;
   height: 100vh;
   z-index: 1;
-  background: #ededee;
+  background: #0a0f1a;
 }
 
+/* ===== PANELES PRINCIPALES ===== */
 .glass-panel {
-  background: rgb(255, 255, 255);
+  background: rgba(17, 24, 39, 0.75);
   backdrop-filter: blur(12px);
-  border: 1px solid rgb(245, 245, 245);
+  border: 1px solid rgba(6, 182, 212, 0.3);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
 }
 
-/* ===== ANIMACIONES HOLOGRÁFICAS ===== */
-
-@keyframes particle-burst {
-  0% { transform: translate(0, 0) scale(1); opacity: 1; }
-  100% { transform: translate(var(--tx), var(--ty)) scale(0); opacity: 0; }
+.shadow-glass {
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3), 0 0 15px rgba(6, 182, 212, 0.2);
 }
 
+/* ===== TARJETA HOLOGRÁFICA ===== */
+.hologram-card {
+  background: rgba(6, 182, 212, 0.08);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(6, 182, 212, 0.4);
+  box-shadow: 0 0 20px rgba(6, 182, 212, 0.2), inset 0 0 30px rgba(6, 182, 212, 0.05);
+  animation: hologram-flicker 4s infinite, pulse-glow 3s infinite;
+  position: relative;
+  overflow: hidden;
+}
+
+.hologram-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: repeating-linear-gradient(0deg,
+    transparent, transparent 2px,
+    rgba(6, 182, 212, 0.03) 2px,
+    rgba(6, 182, 212, 0.03) 4px);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.hologram-card::after {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(6,182,212,0.8), transparent);
+  animation: scanline 3s linear infinite;
+  z-index: 2;
+}
+
+/* ===== ANIMACIONES GLOBALES ===== */
 @keyframes hologram-flicker {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.95; }
@@ -39,75 +72,91 @@
   50% { box-shadow: 0 0 20px rgba(6, 182, 212, 0.7), 0 0 60px rgba(6, 182, 212, 0.3); }
 }
 
-@keyframes float {
+@keyframes marker-float {
   0%, 100% { transform: translateY(0px); }
-  50% { transform: translateY(-6px); }
+  50% { transform: translateY(-5px); }
 }
 
-.particle {
-  position: absolute;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(6,182,212,1) 0%, rgba(6,182,212,0) 70%);
-  pointer-events: none;
-  animation: particle-burst 0.8s ease-out forwards;
+@keyframes marker-pulse-ring {
+  0% { transform: scale(0.5); opacity: 0.3; }
+  100% { transform: scale(1.8); opacity: 0; }
 }
 
-.hologram-card {
-  background: rgba(6, 182, 212, 0.08);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(6, 182, 212, 0.4);
-  box-shadow: 
-    0 0 20px rgba(6, 182, 212, 0.2),
-    inset 0 0 30px rgba(6, 182, 212, 0.05);
-  animation: hologram-flicker 4s infinite, pulse-glow 3s infinite;
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(20px) scale(0.95); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes scan {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(100%); }
+}
+
+/* ===== MARCADORES PERSONALIZADOS (CORREGIDOS) ===== */
+.custom-marker {
+  background: transparent !important;
+  border: none !important;
+}
+
+.marker-pin-container {
   position: relative;
-  overflow: hidden;
-}
-
-.hologram-card::before {
-  content: '';
-  position: absolute;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background: repeating-linear-gradient(
-    0deg,
-    transparent,
-    transparent 2px,
-    rgba(6, 182, 212, 0.03) 2px,
-    rgba(6, 182, 212, 0.03) 4px
-  );
-  pointer-events: none;
-  z-index: 1;
-}
-
-.hologram-card::after {
-  content: '';
-  position: absolute;
-  top: 0; left: 0; right: 0;
-  height: 2px;
-  background: linear-gradient(90deg, transparent, rgba(6,182,212,0.8), transparent);
-  animation: scanline 3s linear infinite;
-  z-index: 2;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .marker-pin {
-  width: 24px;
-  height: 24px;
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
-  background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.9), var(--marker-color));
-  border: 2px solid rgba(255,255,255,0.8);
-  box-shadow: 0 0 15px var(--marker-color), 0 0 30px var(--marker-color);
-  animation: float 2s ease-in-out infinite, pulse-glow 2s infinite;
-  cursor: pointer;
-  transition: transform 0.2s;
+  background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.95), var(--marker-color));
+  border: 2.5px solid rgba(255,255,255,0.9);
+  box-shadow: 0 0 12px var(--marker-color), 0 0 24px var(--marker-color);
+  position: relative;
+  z-index: 2;
+  animation: marker-float 2s ease-in-out infinite;
+  transition: transform 0.2s ease;
 }
 
 .marker-pin:hover {
-  transform: scale(1.3);
+  transform: scale(1.4);
 }
 
-/* Scrollbar estilo terminal para el modal */
+.marker-pulse {
+  position: absolute;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--marker-color);
+  opacity: 0.15;
+  z-index: 1;
+  animation: marker-pulse-ring 2s ease-out infinite;
+}
+
+/* ===== CLASES DE ANIMACIÓN FALTANTES ===== */
+.animate-in {
+  animation: fade-in-up 0.3s ease-out forwards;
+}
+
+.fade-in {
+  animation: fade-in-up 0.2s ease-out;
+}
+
+.zoom-in {
+  animation: fade-in-up 0.2s ease-out;
+}
+
+.duration-200 {
+  animation-duration: 200ms;
+}
+
+.animate-scan {
+  animation: scan 2s linear infinite;
+}
+
+/* ===== SCROLLBAR ESTILO TERMINAL ===== */
 .hologram-scroll::-webkit-scrollbar {
   width: 4px;
 }
@@ -118,275 +167,29 @@
   background: rgba(6, 182, 212, 0.5);
   border-radius: 2px;
 }
-/* ===== POPUP HOLOGRÁFICO DE LEAFLET ===== */
 
+/* ===== OPCIONAL: POPUP HOLOGRÁFICO (NO USADO POR EL COMPONENTE, PERO SE MANTIENE) ===== */
 .holographic-popup .leaflet-popup-content-wrapper {
   background: rgba(6, 182, 212, 0.08) !important;
   backdrop-filter: blur(16px) !important;
   border: 1px solid rgba(6, 182, 212, 0.4) !important;
   border-radius: 16px !important;
-  box-shadow: 
-    0 0 30px rgba(6, 182, 212, 0.15),
-    0 8px 32px rgba(0, 0, 0, 0.4),
-    inset 0 0 30px rgba(6, 182, 212, 0.05) !important;
+  box-shadow: 0 0 30px rgba(6, 182, 212, 0.15), 0 8px 32px rgba(0, 0, 0, 0.4), inset 0 0 30px rgba(6, 182, 212, 0.05) !important;
   padding: 0 !important;
   overflow: hidden;
 }
-
 .holographic-popup .leaflet-popup-content {
   margin: 0 !important;
   padding: 16px !important;
   color: #ecfeff;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-family: ui-monospace, monospace;
   line-height: 1.5;
 }
-
 .holographic-popup .leaflet-popup-tip {
   background: rgba(6, 182, 212, 0.15) !important;
   border: 1px solid rgba(6, 182, 212, 0.3) !important;
   backdrop-filter: blur(16px) !important;
-  box-shadow: 0 0 20px rgba(6, 182, 212, 0.1) !important;
 }
-
-/* Ocultar el close button por defecto, usamos el nuestro */
 .holographic-popup .leaflet-popup-close-button {
   display: none !important;
-}
-
-/* ===== MARCADORES ANIMADOS ===== */
-
-.marker-pin-container {
-  position: relative;
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.marker-pin {
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.95), var(--marker-color));
-  border: 2.5px solid rgba(255,255,255,0.9);
-  box-shadow: 0 0 12px var(--marker-color), 0 0 24px var(--marker-color);
-  position: relative;
-  z-index: 2;
-  animation: marker-float 2s ease-in-out infinite;
-  transition: transform 0.2s ease;
-}
-
-.marker-pin:hover {
-  transform: scale(1.4);
-}
-
-.marker-pulse {
-  position: absolute;
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  background: var(--marker-color);
-  opacity: 0.15;
-  z-index: 1;
-  animation: marker-pulse-ring 2s ease-out infinite;
-}
-
-@keyframes marker-float {
-  0%, 100% { transform: translateY(0px); }
-  50% { transform: translateY(-5px); }
-}
-
-@keyframes marker-pulse-ring {
-  0% { transform: scale(0.5); opacity: 0.3; }
-  100% { transform: scale(1.8); opacity: 0; }
-}
-
-/* ===== TOOLTIP INTERNO ===== */
-
-.holographic-tooltip {
-  position: relative;
-}
-
-.holographic-tooltip::before {
-  content: '';
-  position: absolute;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background: repeating-linear-gradient(
-    0deg,
-    transparent,
-    transparent 2px,
-    rgba(6, 182, 212, 0.02) 2px,
-    rgba(6, 182, 212, 0.02) 4px
-  );
-  pointer-events: none;
-  border-radius: 12px;
-  z-index: 0;
-}
-
-/* Efecto hover en descripción */
-.group\/description:hover p {
-  color: #cffafe;
-  transition: color 0.3s ease;
-}
-
-/* Scrollbar del tooltip */
-.hologram-scroll::-webkit-scrollbar {
-  width: 3px;
-}
-.hologram-scroll::-webkit-scrollbar-track {
-  background: transparent;
-}
-.hologram-scroll::-webkit-scrollbar-thumb {
-  background: rgba(6, 182, 212, 0.3);
-  border-radius: 2px;
-}
-/* ===== POPUP HOLOGRÁFICO DE LEAFLET ===== */
-
-.holographic-popup .leaflet-popup-content-wrapper {
-  background: rgba(6, 182, 212, 0.08) !important;
-  backdrop-filter: blur(16px) !important;
-  border: 1px solid rgba(6, 182, 212, 0.4) !important;
-  border-radius: 16px !important;
-  box-shadow: 
-    0 0 30px rgba(6, 182, 212, 0.15),
-    0 8px 32px rgba(0, 0, 0, 0.4),
-    inset 0 0 30px rgba(6, 182, 212, 0.05) !important;
-  padding: 0 !important;
-  overflow: hidden;
-}
-
-.holographic-popup .leaflet-popup-content {
-  margin: 0 !important;
-  padding: 16px !important;
-  color: #ecfeff;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  line-height: 1.5;
-}
-
-.holographic-popup .leaflet-popup-tip {
-  background: rgba(6, 182, 212, 0.15) !important;
-  border: 1px solid rgba(6, 182, 212, 0.3) !important;
-  backdrop-filter: blur(16px) !important;
-  box-shadow: 0 0 20px rgba(6, 182, 212, 0.1) !important;
-}
-
-/* Ocultar el close button por defecto, usamos el nuestro */
-.holographic-popup .leaflet-popup-close-button {
-  display: none !important;
-}
-
-/* ===== MARCADORES ANIMADOS ===== */
-
-.marker-pin-container {
-  position: relative;
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.marker-pin {
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.95), var(--marker-color));
-  border: 2.5px solid rgba(255,255,255,0.9);
-  box-shadow: 0 0 12px var(--marker-color), 0 0 24px var(--marker-color);
-  position: relative;
-  z-index: 2;
-  animation: marker-float 2s ease-in-out infinite;
-  transition: transform 0.2s ease;
-}
-
-.marker-pin:hover {
-  transform: scale(1.4);
-}
-
-.marker-pulse {
-  position: absolute;
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  background: var(--marker-color);
-  opacity: 0.15;
-  z-index: 1;
-  animation: marker-pulse-ring 2s ease-out infinite;
-}
-
-@keyframes marker-float {
-  0%, 100% { transform: translateY(0px); }
-  50% { transform: translateY(-5px); }
-}
-
-@keyframes marker-pulse-ring {
-  0% { transform: scale(0.5); opacity: 0.3; }
-  100% { transform: scale(1.8); opacity: 0; }
-}
-
-/* ===== TOOLTIP INTERNO ===== */
-
-.holographic-tooltip {
-  position: relative;
-}
-
-.holographic-tooltip::before {
-  content: '';
-  position: absolute;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background: repeating-linear-gradient(
-    0deg,
-    transparent,
-    transparent 2px,
-    rgba(6, 182, 212, 0.02) 2px,
-    rgba(6, 182, 212, 0.02) 4px
-  );
-  pointer-events: none;
-  border-radius: 12px;
-  z-index: 0;
-}
-
-/* Efecto hover en descripción */
-.group\/description:hover p {
-  color: #cffafe;
-  transition: color 0.3s ease;
-}
-
-/* Scrollbar del tooltip */
-.hologram-scroll::-webkit-scrollbar {
-  width: 3px;
-}
-.hologram-scroll::-webkit-scrollbar-track {
-  background: transparent;
-}
-.hologram-scroll::-webkit-scrollbar-thumb {
-  background: rgba(6, 182, 212, 0.3);
-  border-radius: 2px;
-}
-
-/* Animación de entrada para el tooltip */
-@keyframes fade-in-up {
-  from { opacity: 0; transform: translateY(20px) scale(0.95); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
-}
-
-.animate-in {
-  animation: fade-in-up 0.3s ease-out forwards;
-}
-
-/* Scanline animado para hover en descripción */
-@keyframes scan {
-  0% { transform: translateY(-100%); }
-  100% { transform: translateY(100%); }
-}
-
-.animate-scan {
-  animation: scan 2s linear infinite;
-}
-
-/* Mejoras para el marcador custom */
-.custom-marker {
-  background: transparent !important;
-  border: none !important;
 }
