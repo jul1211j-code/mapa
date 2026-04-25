@@ -237,3 +237,13 @@
 .drawing-point-number:hover {
   transform: scale(1.2);
 }
+/* Etiquetas con números en los puntos de dibujo */
+.point-number-label div {
+  font-family: monospace;
+  font-weight: bold;
+  text-shadow: 0 0 2px black;
+  transition: transform 0.1s;
+}
+.point-number-label:hover div {
+  transform: scale(1.2);
+}
