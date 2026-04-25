@@ -143,7 +143,7 @@ const CustomMarker = ({ marker, onDelete }) => {
   return null;
 };
 
-// ===== DRAWING HANDLER (sin cambios) =====
+// ===== DRAWING HANDLER =====
 const DrawingHandler = ({ mode, onPointAdd, points, onFinish, onCancel, onMapClick }) => {
   const map = useMap();
   
@@ -174,16 +174,23 @@ const DrawingHandler = ({ mode, onPointAdd, points, onFinish, onCancel, onMapCli
   return null;
 };
 
-// ===== DRAWING PREVIEW (sin cambios) =====
+// ===== DRAWING PREVIEW CON NÚMEROS (MODIFICADO) =====
 const DrawingPreview = ({ points, color, map }) => {
   useEffect(() => {
     if (!map || points.length < 2) return;
     try {
       const polyline = L.polyline(points, { color, weight: 3, opacity: 0.7, dashArray: '5, 10' }).addTo(map);
-      const markers = points.map((point, i) => 
-        L.circleMarker(point, { radius: 6, fillColor: color, color: '#fff', weight: 2, opacity: 1, fillOpacity: 1 })
-          .addTo(map).bindPopup(`Punto ${i + 1}`)
-      );
+      const markers = points.map((point, i) => {
+        const numberIcon = L.divIcon({
+          className: 'drawing-point-marker',
+          html: `<div class="drawing-point-number" style="background: ${color}; border: 2px solid white;">${i + 1}</div>`,
+          iconSize: [28, 28],
+          iconAnchor: [14, 14],
+        });
+        return L.marker(point, { icon: numberIcon })
+          .addTo(map)
+          .bindTooltip(`Punto ${i + 1}<br>${point[0].toFixed(5)}, ${point[1].toFixed(5)}`, { sticky: true });
+      });
       return () => { 
         if (map) {
           map.removeLayer(polyline); 
@@ -195,6 +202,55 @@ const DrawingPreview = ({ points, color, map }) => {
     }
   }, [points, color, map]);
   return null;
+};
+
+// ===== PANEL DE LISTA DE PUNTOS MIENTRAS DIBUJA (NUEVO) =====
+const PointsDrawPanel = ({ points, onRemovePoint, onClearPoints, onFinish }) => {
+  if (points.length === 0) return null;
+  
+  return (
+    <div className="absolute bottom-24 left-1/2 transform -translate-x-1/2 z-[1000] glass-panel rounded-xl p-3 shadow-glass bg-gray-900/90 border-cyan-500/30 max-w-md w-auto min-w-[260px] backdrop-blur-md">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-cyan-400 font-mono text-xs tracking-wider">🔷 PUNTOS DIBUJADOS ({points.length})</span>
+        <div className="flex gap-2">
+          <button 
+            onClick={onClearPoints}
+            className="text-red-400 hover:text-red-300 text-[10px] font-mono bg-red-500/10 px-2 py-0.5 rounded"
+            title="Borrar todos los puntos"
+          >
+            🗑️ TODO
+          </button>
+          {points.length >= 3 && (
+            <button 
+              onClick={onFinish}
+              className="text-green-400 hover:text-green-300 text-[10px] font-mono bg-green-500/10 px-2 py-0.5 rounded"
+            >
+              ✓ FINALIZAR
+            </button>
+          )}
+        </div>
+      </div>
+      <div className="max-h-36 overflow-y-auto space-y-1 pr-1">
+        {points.map((point, idx) => (
+          <div key={idx} className="flex items-center justify-between gap-3 text-[10px] font-mono bg-black/40 rounded px-2 py-1">
+            <span className="text-cyan-300 font-bold w-6">#{idx+1}</span>
+            <span className="text-cyan-100/70">{point[0].toFixed(5)}</span>
+            <span className="text-cyan-100/70">{point[1].toFixed(5)}</span>
+            <button 
+              onClick={() => onRemovePoint(idx)}
+              className="text-red-400 hover:text-red-300 ml-2"
+              title="Eliminar este punto"
+            >
+              ✖
+            </button>
+          </div>
+        ))}
+      </div>
+      <div className="text-[9px] text-cyan-500/60 text-center mt-2">
+        Doble clic para cerrar el área
+      </div>
+    </div>
+  );
 };
 
 // ===== MARKER FORM MODAL =====
@@ -381,6 +437,14 @@ const MapComponent = () => {
     }
   };
 
+  // ===== NUEVAS FUNCIONES PARA EL PANEL DE PUNTOS =====
+  const removeDrawingPoint = (index) => {
+    setDrawingPoints(prev => prev.filter((_, i) => i !== index));
+  };
+  const clearDrawingPoints = () => {
+    setDrawingPoints([]);
+  };
+
   // ===== LÓGICA MARCADORES =====
   const handleMapClickForMarker = (latLng) => {
     setPendingMarkerPos(latLng);
@@ -458,7 +522,7 @@ const MapComponent = () => {
 
   return (
     <div className="relative h-screen w-full bg-gray-900">
-      {/* Header (igual que antes) */}
+      {/* Header */}
       <div className="absolute top-4 left-4 right-4 z-[1000] glass-panel rounded-2xl p-4 shadow-glass bg-gray-900/80 border-cyan-500/20">
         <div className="flex items-center justify-between flex-wrap gap-4">
           <div className="flex items-center gap-3">
@@ -483,7 +547,7 @@ const MapComponent = () => {
         </div>
       </div>
 
-      {/* Controles laterales (igual) */}
+      {/* Controles laterales */}
       <div className="absolute top-28 left-4 z-[1000] flex flex-col gap-3">
         <div className="glass-panel rounded-2xl p-3 shadow-glass bg-gray-900/80 border-cyan-500/20 flex flex-col gap-2">
           <button onClick={() => setMode(mode === 'area' ? null : 'area')}
@@ -584,6 +648,16 @@ const MapComponent = () => {
           <MapPin className="w-5 h-5 text-purple-400 animate-bounce" />
           <span className="font-mono text-sm">CLIC EN EL MAPA PARA COLOCAR MARCADOR</span>
         </div>
+      )}
+
+      {/* Panel de puntos mientras dibuja área (NUEVO) */}
+      {mode === 'area' && (
+        <PointsDrawPanel 
+          points={drawingPoints}
+          onRemovePoint={removeDrawingPoint}
+          onClearPoints={clearDrawingPoints}
+          onFinish={finishDrawing}
+        />
       )}
 
       {/* Formulario nuevo marcador */}
