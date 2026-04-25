@@ -60,10 +60,9 @@ const CustomMarker = ({ marker, onDelete }) => {
   const map = useMap();
   
   useEffect(() => {
-    // Validación de coordenadas
     if (!map) return;
     if (typeof marker.lat !== 'number' || typeof marker.lng !== 'number' || isNaN(marker.lat) || isNaN(marker.lng)) {
-      console.warn('Marcador inválido (coordenadas no numéricas):', marker);
+      console.warn('Marcador inválido:', marker);
       return;
     }
     
@@ -143,7 +142,7 @@ const CustomMarker = ({ marker, onDelete }) => {
   return null;
 };
 
-// ===== DRAWING HANDLER =====
+// ===== DRAWING HANDLER (sin cambios) =====
 const DrawingHandler = ({ mode, onPointAdd, points, onFinish, onCancel, onMapClick }) => {
   const map = useMap();
   
@@ -174,86 +173,59 @@ const DrawingHandler = ({ mode, onPointAdd, points, onFinish, onCancel, onMapCli
   return null;
 };
 
-// ===== DRAWING PREVIEW CON NÚMEROS (MODIFICADO) =====
-const DrawingPreview = ({ points, color, map }) => {
+// ===== DRAWING PREVIEW MEJORADO (con números visibles en los puntos) =====
+const DrawingPreview = ({ points, color, map, areaNumber }) => {
   useEffect(() => {
     if (!map || points.length < 2) return;
+    
     try {
+      // Línea temporal
       const polyline = L.polyline(points, { color, weight: 3, opacity: 0.7, dashArray: '5, 10' }).addTo(map);
-      const markers = points.map((point, i) => {
+      
+      // Círculos + números en cada punto
+      const markers = [];
+      const labels = [];
+      
+      points.forEach((point, idx) => {
+        // Círculo
+        const circle = L.circleMarker(point, { 
+          radius: 8, 
+          fillColor: color, 
+          color: '#fff', 
+          weight: 2, 
+          opacity: 1, 
+          fillOpacity: 0.8 
+        }).addTo(map);
+        circle.bindPopup(`Punto ${idx + 1}`);
+        markers.push(circle);
+        
+        // Etiqueta con número (visible siempre)
         const numberIcon = L.divIcon({
-          className: 'drawing-point-marker',
-          html: `<div class="drawing-point-number" style="background: ${color}; border: 2px solid white;">${i + 1}</div>`,
-          iconSize: [28, 28],
-          iconAnchor: [14, 14],
+          className: 'point-number-label',
+          html: `<div style="background: ${color}; color: white; border-radius: 50%; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: bold; border: 1.5px solid white; box-shadow: 0 0 6px black;">${idx + 1}</div>`,
+          iconSize: [22, 22],
+          iconAnchor: [11, 11]
         });
-        return L.marker(point, { icon: numberIcon })
-          .addTo(map)
-          .bindTooltip(`Punto ${i + 1}<br>${point[0].toFixed(5)}, ${point[1].toFixed(5)}`, { sticky: true });
+        const label = L.marker(point, { icon: numberIcon }).addTo(map);
+        labels.push(label);
       });
-      return () => { 
+      
+      return () => {
         if (map) {
-          map.removeLayer(polyline); 
-          markers.forEach(m => map.removeLayer(m)); 
+          map.removeLayer(polyline);
+          markers.forEach(m => map.removeLayer(m));
+          labels.forEach(l => map.removeLayer(l));
         }
       };
     } catch (err) {
       console.error('Error en DrawingPreview:', err);
     }
   }, [points, color, map]);
+  
   return null;
 };
 
-// ===== PANEL DE LISTA DE PUNTOS MIENTRAS DIBUJA (NUEVO) =====
-const PointsDrawPanel = ({ points, onRemovePoint, onClearPoints, onFinish }) => {
-  if (points.length === 0) return null;
-  
-  return (
-    <div className="absolute bottom-24 left-1/2 transform -translate-x-1/2 z-[1000] glass-panel rounded-xl p-3 shadow-glass bg-gray-900/90 border-cyan-500/30 max-w-md w-auto min-w-[260px] backdrop-blur-md">
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-cyan-400 font-mono text-xs tracking-wider">🔷 PUNTOS DIBUJADOS ({points.length})</span>
-        <div className="flex gap-2">
-          <button 
-            onClick={onClearPoints}
-            className="text-red-400 hover:text-red-300 text-[10px] font-mono bg-red-500/10 px-2 py-0.5 rounded"
-            title="Borrar todos los puntos"
-          >
-            🗑️ TODO
-          </button>
-          {points.length >= 3 && (
-            <button 
-              onClick={onFinish}
-              className="text-green-400 hover:text-green-300 text-[10px] font-mono bg-green-500/10 px-2 py-0.5 rounded"
-            >
-              ✓ FINALIZAR
-            </button>
-          )}
-        </div>
-      </div>
-      <div className="max-h-36 overflow-y-auto space-y-1 pr-1">
-        {points.map((point, idx) => (
-          <div key={idx} className="flex items-center justify-between gap-3 text-[10px] font-mono bg-black/40 rounded px-2 py-1">
-            <span className="text-cyan-300 font-bold w-6">#{idx+1}</span>
-            <span className="text-cyan-100/70">{point[0].toFixed(5)}</span>
-            <span className="text-cyan-100/70">{point[1].toFixed(5)}</span>
-            <button 
-              onClick={() => onRemovePoint(idx)}
-              className="text-red-400 hover:text-red-300 ml-2"
-              title="Eliminar este punto"
-            >
-              ✖
-            </button>
-          </div>
-        ))}
-      </div>
-      <div className="text-[9px] text-cyan-500/60 text-center mt-2">
-        Doble clic para cerrar el área
-      </div>
-    </div>
-  );
-};
-
-// ===== MARKER FORM MODAL =====
+// ===== FORMULARIO MARCADOR =====
 const MarkerFormModal = ({ position, onSave, onCancel }) => {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -349,7 +321,6 @@ const MapComponent = () => {
         if (areasError) throw new Error(`Áreas: ${areasError.message}`);
         if (markersError) throw new Error(`Marcadores: ${markersError.message}`);
         
-        // Asegurar que lat/lng sean números
         const sanitizedMarkers = (markersData || []).map(m => ({
           ...m,
           lat: Number(m.lat),
@@ -399,10 +370,12 @@ const MapComponent = () => {
 
   // ===== LÓGICA ÁREAS =====
   const addDrawingPoint = useCallback((point) => setDrawingPoints(prev => [...prev, point]), []);
+  
   const finishDrawing = useCallback(async () => {
     if (drawingPoints.length < 3) { alert('Mínimo 3 puntos'); return; }
+    const nextAreaNumber = areas.length + 1;
     const newArea = {
-      name: `Área ${areas.length + 1}`,
+      name: `Área ${nextAreaNumber}`,
       coordinates: [...drawingPoints],
       color: selectedColor.hex,
       fill_opacity: selectedColor.fillOpacity,
@@ -420,12 +393,14 @@ const MapComponent = () => {
       setAreas(prev => prev.map(a => a.id === tempId ? data[0] : a));
     }
   }, [drawingPoints, selectedColor, areas.length]);
+
   const cancelMode = useCallback(() => {
     setMode(null);
     setDrawingPoints([]);
     setShowMarkerForm(false);
     setPendingMarkerPos(null);
   }, []);
+
   const deleteArea = async (id) => {
     if (!confirm('¿Eliminar esta área?')) return;
     setAreas(prev => prev.filter(a => a.id !== id));
@@ -437,19 +412,12 @@ const MapComponent = () => {
     }
   };
 
-  // ===== NUEVAS FUNCIONES PARA EL PANEL DE PUNTOS =====
-  const removeDrawingPoint = (index) => {
-    setDrawingPoints(prev => prev.filter((_, i) => i !== index));
-  };
-  const clearDrawingPoints = () => {
-    setDrawingPoints([]);
-  };
-
   // ===== LÓGICA MARCADORES =====
   const handleMapClickForMarker = (latLng) => {
     setPendingMarkerPos(latLng);
     setShowMarkerForm(true);
   };
+  
   const saveMarker = async (data) => {
     const numericData = { ...data, lat: Number(data.lat), lng: Number(data.lng) };
     const tempId = 'temp-' + Date.now();
@@ -467,6 +435,7 @@ const MapComponent = () => {
       setMarkers(prev => prev.map(m => m.id === tempId ? savedMarker : m));
     }
   };
+  
   const deleteMarker = async (id) => {
     if (!confirm('¿Eliminar este marcador?')) return;
     setMarkers(prev => prev.filter(m => m.id !== id));
@@ -477,6 +446,7 @@ const MapComponent = () => {
       setMarkers(data || []);
     }
   };
+
   const loadPredefinedArea = async () => {
     const predefined = {
       name: 'Plaza Mayor Madrid',
@@ -490,6 +460,7 @@ const MapComponent = () => {
       mapInstance.fitBounds(L.latLngBounds(predefined.coordinates), { padding: [50, 50] });
     }
   };
+
   const exportData = () => {
     const blob = new Blob([JSON.stringify({ areas, markers }, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -498,6 +469,7 @@ const MapComponent = () => {
     link.download = `mapa-respaldo-${new Date().toISOString().split('T')[0]}.json`;
     link.click();
   };
+
   const centerOnCurrentLocation = () => {
     if (mapInstance && position) mapInstance.flyTo([position.lat, position.lng], 18);
   };
@@ -519,10 +491,12 @@ const MapComponent = () => {
   }
 
   const defaultPosition = position && position.lat && position.lng ? position : { lat: 40.4168, lng: -3.7038 };
+  const nextAreaNumber = areas.length + 1; // para mostrar en instrucciones
 
   return (
     <div className="relative h-screen w-full bg-gray-900">
-      {/* Header */}
+      
+      {/* Header (sin cambios) */}
       <div className="absolute top-4 left-4 right-4 z-[1000] glass-panel rounded-2xl p-4 shadow-glass bg-gray-900/80 border-cyan-500/20">
         <div className="flex items-center justify-between flex-wrap gap-4">
           <div className="flex items-center gap-3">
@@ -547,7 +521,7 @@ const MapComponent = () => {
         </div>
       </div>
 
-      {/* Controles laterales */}
+      {/* Controles laterales (sin cambios) */}
       <div className="absolute top-28 left-4 z-[1000] flex flex-col gap-3">
         <div className="glass-panel rounded-2xl p-3 shadow-glass bg-gray-900/80 border-cyan-500/20 flex flex-col gap-2">
           <button onClick={() => setMode(mode === 'area' ? null : 'area')}
@@ -591,7 +565,7 @@ const MapComponent = () => {
         </div>
       </div>
 
-      {/* Lista de datos */}
+      {/* Lista de datos (igual) */}
       {showDataList && (
         <div className="absolute top-28 right-4 z-[1000] w-80 glass-panel rounded-2xl p-4 shadow-glass bg-gray-900/90 border-cyan-500/20 max-h-[70vh] overflow-y-auto">
           <h3 className="font-bold text-cyan-400 mb-3 font-mono text-sm tracking-widest flex items-center gap-2">
@@ -634,12 +608,14 @@ const MapComponent = () => {
         </div>
       )}
 
-      {/* Instrucciones */}
+      {/* Instrucciones con número de área actual */}
       {mode === 'area' && (
         <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 z-[1000] bg-gray-900/90 border border-blue-500/30 text-blue-200 px-6 py-3 rounded-xl shadow-2xl flex items-center gap-3 backdrop-blur-md">
           <MousePointer2 className="w-5 h-5 text-blue-400 animate-bounce" />
           <span className="font-mono text-sm">
-            {drawingPoints.length === 0 ? 'CLIC PARA INICIAR ÁREA' : `PUNTOS: ${drawingPoints.length} • DOBLE CLIC PARA CERRAR`}
+            {drawingPoints.length === 0 
+              ? `CLIC PARA INICIAR ÁREA #${nextAreaNumber}` 
+              : `ÁREA #${nextAreaNumber} • PUNTOS: ${drawingPoints.length} • DOBLE CLIC PARA CERRAR`}
           </span>
         </div>
       )}
@@ -648,16 +624,6 @@ const MapComponent = () => {
           <MapPin className="w-5 h-5 text-purple-400 animate-bounce" />
           <span className="font-mono text-sm">CLIC EN EL MAPA PARA COLOCAR MARCADOR</span>
         </div>
-      )}
-
-      {/* Panel de puntos mientras dibuja área (NUEVO) */}
-      {mode === 'area' && (
-        <PointsDrawPanel 
-          points={drawingPoints}
-          onRemovePoint={removeDrawingPoint}
-          onClearPoints={clearDrawingPoints}
-          onFinish={finishDrawing}
-        />
       )}
 
       {/* Formulario nuevo marcador */}
@@ -670,25 +636,62 @@ const MapComponent = () => {
       <MapContainer center={[defaultPosition.lat, defaultPosition.lng]} zoom={16}
         scrollWheelZoom={true} className="h-full w-full" whenCreated={setMapInstance}>
         <TileLayer attribution='&copy; OpenStreetMap contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+        
         <DrawingHandler mode={mode} onPointAdd={addDrawingPoint} points={drawingPoints}
           onFinish={finishDrawing} onCancel={cancelMode} onMapClick={handleMapClickForMarker} />
+        
         {mode === 'area' && mapInstance && (
-          <DrawingPreview points={drawingPoints} color={selectedColor.hex} map={mapInstance} />
+          <DrawingPreview points={drawingPoints} color={selectedColor.hex} map={mapInstance} areaNumber={nextAreaNumber} />
         )}
-        {areas.map((area) => (
-          <Polygon key={area.id} positions={area.coordinates}
+        
+        {/* Áreas existentes con popup interactivo (nuevo) */}
+        {areas.map((area, idx) => (
+          <Polygon 
+            key={area.id} 
+            positions={area.coordinates}
             pathOptions={{
               color: area.color, fillColor: area.color,
               fillOpacity: area.fill_opacity || 0.35, weight: 3,
               opacity: area.stroke_opacity || 0.9, lineCap: 'round', lineJoin: 'round',
-            }} />
+            }}
+            eventHandlers={{
+              click: (e) => {
+                // Popup personalizado con información del área y botón eliminar
+                const popupContent = `
+                  <div class="hologram-card p-3 min-w-[200px]" style="animation: none;">
+                    <div class="flex items-center gap-2 mb-2">
+                      <div class="w-3 h-3 rounded-sm" style="background: ${area.color}; box-shadow: 0 0 6px ${area.color};"></div>
+                      <strong class="text-cyan-50 font-mono text-sm">${area.name || `Área #${idx+1}`}</strong>
+                    </div>
+                    <div class="text-[10px] text-cyan-400/80 mb-2">${area.coordinates?.length || 0} puntos</div>
+                    <button id="delete-area-${area.id}" class="bg-red-500/20 border border-red-500/40 text-red-300 text-[10px] px-3 py-1 rounded font-mono w-full hover:bg-red-500/30 transition">🗑️ ELIMINAR ÁREA</button>
+                  </div>
+                `;
+                const popup = L.popup()
+                  .setLatLng(e.latlng)
+                  .setContent(popupContent)
+                  .openOn(mapInstance);
+                
+                // Agregar evento al botón después de que el DOM del popup esté listo
+                setTimeout(() => {
+                  const btn = document.getElementById(`delete-area-${area.id}`);
+                  if (btn) {
+                    btn.onclick = () => deleteArea(area.id);
+                  }
+                }, 50);
+              }
+            }}
+          />
         ))}
+        
         {/* Marcadores filtrados y validados */}
         {markers
           .filter(m => typeof m.lat === 'number' && typeof m.lng === 'number' && !isNaN(m.lat) && !isNaN(m.lng))
           .map((marker) => (
             <CustomMarker key={marker.id} marker={marker} onDelete={deleteMarker} />
           ))}
+        
+        {/* Ubicación actual */}
         {position && position.lat && position.lng && (
           <CircleMarker center={[position.lat, position.lng]} radius={8}
             pathOptions={{ color: '#3b82f6', fillColor: '#3b82f6', fillOpacity: 0.8, weight: 2 }} />
