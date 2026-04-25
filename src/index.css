@@ -211,3 +211,29 @@
 .delete-marker-btn {
   cursor: pointer;
 }
+/* ===== PUNTOS DE DIBUJO NUMERADOS ===== */
+.drawing-point-marker {
+  background: transparent !important;
+  border: none !important;
+}
+.drawing-point-number {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: monospace;
+  font-weight: bold;
+  font-size: 14px;
+  color: white;
+  text-shadow: 0 0 2px black;
+  background: var(--bg-color, #3b82f6);
+  border: 2px solid white;
+  box-shadow: 0 0 10px rgba(0,0,0,0.5);
+  cursor: pointer;
+  transition: transform 0.1s;
+}
+.drawing-point-number:hover {
+  transform: scale(1.2);
+}
